@@ -306,6 +306,28 @@ def main():
         prova("app.js si compila", esito.returncode == 0,
               esito.stderr.decode()[:200])
 
+    # -------------------------------------------------------- installazione
+    # Si prova su una casa finta: e' la strada che fa chi arriva dal repo, e
+    # finora non la controllava nessuno. Fuori restano i due LaunchAgent, che
+    # parlano con il launchd vero dell'utente e non si simulano.
+    casa = Path(tempfile.mkdtemp(prefix="plancia-casa-"))
+    codice = (
+        "import sys; sys.path.insert(0, %r)\n"
+        "from plancia import setup_claude as s, codex\n"
+        "print(s.install_command()); print(s.install_mcp()); print(codex.registra_mcp())\n"
+        "print(s.install_hooks()); print(s.install_skill())\n" % str(RADICE))
+    ambiente = dict(os.environ, HOME=str(casa), PLANCIA_HOME=str(casa / ".plancia"))
+    esito = subprocess.run([sys.executable, "-c", codice], capture_output=True, env=ambiente)
+    prova("l'installazione da zero non si rompe", esito.returncode == 0,
+          esito.stderr.decode()[-200:])
+    prova("scrive le due skill",
+          (casa / ".claude/skills/plancia/SKILL.md").exists()
+          and (casa / ".claude/skills/riepilogo/SKILL.md").exists())
+    prova("mette gli hook", (casa / ".claude/settings.json").exists())
+    prova("mette il comando", (casa / ".local/bin/plancia").exists())
+    prova("non tocca la casa vera", not (Path.home() / ".plancia-finta").exists())
+    shutil.rmtree(casa, ignore_errors=True)
+
     # ------------------------------------------------------------------- skill
     from plancia import setup_claude as _sc  # noqa: E402
     for nome, costante in (("plancia", _sc.SKILL), ("riepilogo", _sc.RIEPILOGO_SKILL)):
