@@ -131,6 +131,69 @@ def cmd_task(args):
         conn.close()
 
 
+def cmd_lavagna(args):
+    from . import lavagna
+    conn = store.connect()
+    store.init_db(conn)
+    try:
+        c = lavagna.conteggi(conn)
+        print("  " + "   ".join(f"{f}: {d.get('aperti', 0)} aperti" for f, d in c.items()))
+        print()
+        for v in lavagna.elenco(conn, args.stato, args.fonte, 100):
+            prog = f"  [{v['progetto']}]" if v["progetto"] else ""
+            print(f"{v['fonte']:<8} {v['stato']:<9} {v['titolo'][:64]}{prog}")
+    finally:
+        conn.close()
+
+
+def cmd_manda(args):
+    from . import cantiere
+    conn = store.connect()
+    store.init_db(conn)
+    try:
+        r = cantiere.avvia(conn, " ".join(args.titolo), progetto=args.progetto,
+                           istruzioni=args.istruzioni or "", agente=args.agente,
+                           modo=args.modo, task_id=args.task, attendi=args.attendi)
+        print(f"lancio #{r['run']} · {r['agente']} · {r['modo']} · {r['cwd']}")
+        if args.attendi:
+            d = cantiere.dettaglio(conn, r["run"])
+            print(f"\n[{d['stato']}] {d['esito'][:600]}")
+        else:
+            print("gira in sottofondo: `plancia lanci` per vedere com'è andata")
+    finally:
+        conn.close()
+
+
+def cmd_lanci(args):
+    from . import cantiere
+    conn = store.connect()
+    store.init_db(conn)
+    try:
+        if args.id:
+            d = cantiere.dettaglio(conn, args.id)
+            if not d:
+                return print("lancio inesistente")
+            print(f"#{d['id']} {d['agente']} {d['modo']} {d['stato']}  {d['cwd']}")
+            print(f"log: {d['log']}")
+            print()
+            print(d["esito"] or "(nessun esito)")
+            return
+        for r in cantiere.elenco(conn, 20):
+            durata = ""
+            if r["inizio"] and r["fine"]:
+                durata = f"  {r['fine'][11:19]}"
+            print(f"#{r['id']:<4} {r['agente']:<7} {r['modo']:<9} {r['stato']:<10}"
+                  f"{(r['task'] or r['prompt'][:50]).splitlines()[0][:50]}{durata}")
+    finally:
+        conn.close()
+
+
+def cmd_eventi(args):
+    from . import eventi
+    for e in eventi.leggi(args.dopo, args.tipo, args.limite):
+        print(f"{e['ts'][:19]}  {e['tipo']:<22} {e['titolo'][:52]}  {e['id']}")
+
+
 def cmd_projects(args):
     conn = store.connect()
     store.init_db(conn)
@@ -339,6 +402,31 @@ def build_parser():
 
     s = sub.add_parser("projects", help="elenco progetti")
     s.set_defaults(func=cmd_projects)
+
+    s = sub.add_parser("lavagna", help="tutti i task aperti, di tutti gli agenti")
+    s.add_argument("--stato", default="aperti")
+    s.add_argument("--fonte", choices=["plancia", "claude", "codex"])
+    s.set_defaults(func=cmd_lavagna)
+
+    s = sub.add_parser("manda", help="manda un lavoro a un agente")
+    s.add_argument("titolo", nargs="+")
+    s.add_argument("--progetto")
+    s.add_argument("--istruzioni", help="come lo vuoi fatto")
+    s.add_argument("--agente", choices=["claude", "codex"], default="claude")
+    s.add_argument("--modo", choices=["proposta", "esegui"], default="proposta")
+    s.add_argument("--task", type=int, help="id del task di Plancia da chiudere")
+    s.add_argument("--attendi", action="store_true")
+    s.set_defaults(func=cmd_manda)
+
+    s = sub.add_parser("lanci", help="i lavori mandati agli agenti")
+    s.add_argument("id", nargs="?", type=int)
+    s.set_defaults(func=cmd_lanci)
+
+    s = sub.add_parser("eventi", help="il registro degli eventi")
+    s.add_argument("--dopo")
+    s.add_argument("--tipo")
+    s.add_argument("--limite", type=int, default=30)
+    s.set_defaults(func=cmd_eventi)
 
     s = sub.add_parser("search", help="cerca in tutto")
     s.add_argument("query", nargs="+")

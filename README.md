@@ -1,10 +1,11 @@
 # Plancia
 
-A control room for the work you do with AI. Plancia reads what already happened
-inside Claude Code, keeps it in one place, and gives it back two ways: a native
-macOS app for you, and an MCP server plus an automatic briefing for Claude.
+One board for the work you do with AI. Claude Code and Codex already write down
+everything they do, in files on your disk. Nothing reads them together. Plancia
+does: every open task from both on one board, a spoken recap of the day that ends
+with what is worth doing next, and one place to send the work back.
 
-It also tells you how the day went, out loud, in your language.
+Website: [plancia](https://eugenionerelli.github.io/plancia/).
 
 Local-first. Nothing leaves the machine. No dependencies to install: Python 3 and
 its standard library, Swift for the app.
@@ -22,6 +23,8 @@ its standard library, Swift for the app.
 | skills, plugins, routines | `~/.claude/skills`, `plugins`, `scheduled-tasks` | what your Claude Code can do |
 | GitHub | `gh repo list`, recent commits | repos, commits, real material for posts |
 | local git | your code roots | branch, uncommitted changes |
+| Codex sessions and goals | `~/.codex/sessions`, `goals_1.sqlite` | the same, plus what Codex is stuck on |
+| Claude Code task lists | `~/.claude/tasks/<session>/*.json` | what is open right now, per session |
 | session hooks | `SessionStart`, `SessionEnd` | which sessions are open right now |
 
 Sources are never modified. Plancia reads them and stays out of the way.
@@ -46,7 +49,7 @@ backend, so there is nothing to start by hand. `plancia://recap`,
 `plancia://pdf` are
 URL actions you can bind to a system shortcut, Raycast or Shortcuts.
 
-**Claude Code and Codex.** Sixteen `plancia_*` MCP tools in every session of both, a `SessionStart`
+**Claude Code and Codex.** Twenty `plancia_*` MCP tools in every session of both, a `SessionStart`
 hook that hands Claude your current state as opening context, and two skills that
 tell it when to read from Plancia and when to write back.
 
@@ -55,10 +58,8 @@ week?"`, `plancia task add`, `plancia search`, `plancia projects`.
 
 ## The daily recap
 
-![The recap](docs/recap.png)
-
-Plancia collects the day from real data — sessions, commits, tasks opened and
-closed, posts, what each project is waiting on — and turns it into something
+Plancia collects the day from real data, sessions and commits and tasks opened
+and closed and posts and what each project is waiting on, and turns it into something
 written to be heard: short sentences, no lists, no markdown, no file paths read
 out loud.
 
@@ -83,14 +84,24 @@ plancia daily on 08:45 --voce    # every morning, out loud
 Asking a question goes through Claude Code with your Plancia context attached, so
 the answer is grounded in what actually happened, not in a guess.
 
+### It ends with a decision
+
+The recap does not stop at the facts. Plancia looks for signals in the data and
+turns them into proposals, each with an action already prepared: a failed run to
+retry, a Codex goal out of quota, files uncommitted since yesterday, an approved
+post that never went out, a project whose declared next step has gone stale.
+Proposals only ever come from signals, never from a model's hunch, so a quiet day
+gives you a short recap instead of an invented suggestion. Say "do it", or "the
+second one", and it runs.
+
 ## Jarvis
 
 Hold nothing, press nothing. `⌥Space` anywhere, or `plancia://jarvis`, opens a
 panel that listens continuously and works out you have finished speaking from the
 silence, not from a key you keep held down.
 
-What it hears goes two ways. Phrases it can recognise with certainty — open a
-view, note a task, close one, re-read the sources, read me the recap — run
+What it hears goes two ways. Phrases it can recognise with certainty (open a
+view, note a task, close one, re-read the sources, read me the recap) run
 locally in a tenth of a second. Everything else goes to Claude Code in headless
 mode with the `plancia_*` tools open, so it can actually add the task, update the
 project or search the archive, not just answer about it.
@@ -103,11 +114,50 @@ Claude Code has had [voice input since March 2026](https://claudefa.st/blog/guid
 you hold the spacebar and dictate. It is input only, and by design there is no
 hands-free mode. This is the other half: it speaks back, and it acts.
 
+## The board
+
+![The board](docs/board.png)
+
+Claude Code keeps its task list in one folder, Codex keeps its goals in a
+different database, Plancia has its own. None of the three knows the other two
+exist. The board reads all of them, normalises the states to `open`, `in
+progress`, `blocked`, `done`, `gone`, and shows one list.
+
+From any row you can write how you want the work done and dispatch it:
+
+```bash
+plancia lavagna                          # the board, in the terminal
+plancia manda "rerun the ablation" --agente codex --progetto atlas
+plancia lanci                            # how the runs went
+```
+
+The default mode is `proposta`: the agent reads and reports without touching a
+file. `--modo esegui` lets it write, and that is a choice you make every time.
+Runs are recorded with their outcome, tokens and cost.
+
+## The event log
+
+Other tools should not have to poll a database to know something happened. Every
+meaningful event is appended to `~/.plancia/eventi.jsonl`, one JSON line, schema
+`plancia.evento/1`:
+
+```json
+{"schema":"plancia.evento/1","id":"9f2c…","ts":"2026-08-02T09:14:22Z",
+ "tipo":"lavoro.completato","titolo":"Rerun the ablation","progetto":"atlas",
+ "origine":"cantiere","dati":{"agente":"codex","modo":"esegui","token":22800}}
+```
+
+Types: `lavoro.avviato|completato|fallito`, `task.creato|chiuso`,
+`post.pubblicato`, `progetto.archiviato|aggiornato`, `riepilogo.pronto`. A
+consumer keeps the id of the last event it saw and asks for what came after, with
+`plancia eventi --dopo <id>` or `GET /api/eventi`. The file is append only and
+rotates at 5 MB.
+
 ## Two agents, one archive
 
 Plancia reads Codex sessions from `~/.codex/sessions` alongside Claude Code's,
 and registers its own MCP server inside `~/.codex/config.toml`. Both agents see
-the same projects, the same tasks, the same sixteen tools. The Agents view shows
+the same projects, the same tasks, the same twenty tools. The Agents view shows
 who worked on what and when the two handed work to each other, inside the
 Archive.
 
@@ -189,6 +239,11 @@ plancia/briefing.py    what Claude sees
 plancia/actions.py     writes, shared by HTTP and MCP
 plancia/api.py         local server and REST
 plancia/mcp.py         JSON-RPC over stdio
+plancia/lavagna.py     the unified board
+plancia/cantiere.py    dispatching work to an agent
+plancia/proposte.py    what is worth doing, from signals
+plancia/eventi.py      the append only event log
+site/                  the website, published on GitHub Pages
 mac/Sources/main.swift the macOS app
 web/                   dashboard, no framework, no build step
 ```
@@ -197,10 +252,12 @@ Data lives in `~/.plancia/`: `plancia.db` (SQLite), `seed.json`, `token`,
 `briefing.md`, `audio/`. Keep it out of any synced folder: a SQLite file inside
 Dropbox or Drive will corrupt.
 
-## Four surfaces
+## Five surfaces
 
-Today (the recap, the rhythm, the tasks), Projects, Social, Archive (sessions,
-agents, memory, skills). Everything else goes through ⌘K.
+Today (the recap, the rhythm, the proposals, the tasks), Board, Projects, Social,
+Archive (sessions, agents, memory, skills). Everything else goes through ⌘K. On
+first run a five step guide explains the parts that are not obvious, and it stays
+available under "Guide".
 
 ## Requirements
 
@@ -213,6 +270,13 @@ The server listens on loopback only. HTTP writes require the token in
 `~/.plancia/token`; the dashboard receives it from the server inside the page.
 Reads are open: it is your data, already on your disk.
 
-## Licence
+## Licence and price
 
-MIT. See [LICENSE](LICENSE).
+GPL-3.0-or-later. See [LICENSE](LICENSE) and [COPYRIGHT](COPYRIGHT). Versions up
+to 0.2.0 were MIT and stay MIT.
+
+Building from source is free and always will be. A signed and notarised build,
+which opens with a double click, is pay what you want from €5 on the
+[website](https://eugenionerelli.github.io/plancia/#prezzo). It is the same
+program: what you pay for is the Apple certificate, the notarisation and the
+maintenance. See [docs/RILASCIO.md](docs/RILASCIO.md) for how a release is cut.

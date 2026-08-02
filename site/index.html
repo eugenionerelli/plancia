@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plancia: one board for the work you do with AI</title>
+<meta name="description" content="Plancia reads what Claude Code and Codex already write on your disk and puts it on one board: every open task, a spoken daily recap, and one place to send work back. Local only, open source.">
+<meta property="og:title" content="Plancia: one board for the work you do with AI">
+<meta property="og:description" content="Every open task from every coding agent, on one board. A spoken recap that proposes what to do next. Runs on your machine, sends nothing.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://eugenionerelli.github.io/plancia/img/today.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="stylesheet" href="style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='12' r='9' fill='none' stroke='%23e8934e' stroke-width='1.6'/><circle cx='12' cy='12' r='2' fill='%23e8934e'/><path d='M12 1v4M12 19v4M1 12h4M19 12h4' stroke='%23e8934e' stroke-width='1.6'/></svg>">
+</head>
+<body>
+
+<header class="barra">
+  <div class="wrap">
+    <a class="marchio" href="./">
+      <svg class="bussola" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" fill="none" stroke="#e8934e" stroke-width="1.5"/>
+        <circle cx="12" cy="12" r="2.1" fill="#e8934e"/>
+        <path d="M12 1v4M12 19v4M1 12h4M19 12h4" stroke="#e8934e" stroke-width="1.5"/>
+      </svg>
+      <span class="nome">Plancia</span>
+    </a>
+    <nav class="menu">
+      <a href="#cosa-fa" class="solo-largo" data-lingua="en">What it does</a>
+      <a href="#cosa-fa" class="solo-largo" data-lingua="it">Cosa fa</a>
+      <a href="#dati" class="solo-largo" data-lingua="en">Your data</a>
+      <a href="#dati" class="solo-largo" data-lingua="it">I tuoi dati</a>
+      <a href="#prezzo" data-lingua="en">Price</a>
+      <a href="#prezzo" data-lingua="it">Prezzo</a>
+      <a href="https://github.com/eugenionerelli/plancia">GitHub</a>
+      <span class="lingua">
+        <button data-imposta="en" aria-pressed="true">en</button>
+        <button data-imposta="it" aria-pressed="false">it</button>
+      </span>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<!-- ------------------------------------------------------------- apertura -->
+<section class="apertura">
+  <div class="wrap">
+    <span class="occhiello"><i class="punto"></i>
+      <span data-lingua="en">macOS · open source · nothing leaves the machine</span>
+      <span data-lingua="it">macOS · open source · non esce niente dalla macchina</span>
+    </span>
+
+    <h1 data-lingua="en">Two agents, four terminals,<br><em>one board.</em></h1>
+    <h1 data-lingua="it">Due agenti, quattro terminali,<br><em>una lavagna sola.</em></h1>
+
+    <p class="sotto" data-lingua="en">
+      Claude Code and Codex already write down everything they do, transcripts and task
+      lists and goals and memory, in files on your disk. Nothing reads them together.
+      Plancia does: every open task on one board, a spoken recap of the day that ends
+      with what is worth doing next, and one place to send the work back.
+    </p>
+    <p class="sotto" data-lingua="it">
+      Claude Code e Codex si scrivono già tutto, transcript e liste di task e obiettivi e
+      memoria, in file sul tuo disco. Solo che non li legge nessuno insieme. Plancia sì:
+      tutti i task aperti su una lavagna sola, un riepilogo parlato della giornata che
+      finisce con la cosa che conviene fare, e un posto solo da cui rimandare il lavoro.
+    </p>
+
+    <div class="azioni">
+      <a class="btn primo" href="#prezzo">
+        <span data-lingua="en">Download for macOS</span>
+        <span data-lingua="it">Scarica per macOS</span>
+        <small>· Apple silicon</small>
+      </a>
+      <a class="btn" href="https://github.com/eugenionerelli/plancia">
+        <span data-lingua="en">Build it from source, free</span>
+        <span data-lingua="it">Compilalo dal sorgente, gratis</span>
+      </a>
+    </div>
+    <p class="postilla">
+      <span data-lingua="en">Python 3 and macOS 13+. No dependencies to install, no account, no server.
+        The whole archive is one file: <code>~/.plancia/plancia.db</code>.</span>
+      <span data-lingua="it">Python 3 e macOS 13+. Nessuna dipendenza da installare, nessun account,
+        nessun server. L'archivio è un file solo: <code>~/.plancia/plancia.db</code>.</span>
+    </p>
+
+    <div class="prove">
+      <div><div class="n zero mono">0</div>
+        <p data-lingua="en">bytes sent anywhere</p><p data-lingua="it">byte spediti da qualche parte</p></div>
+      <div><div class="n mono">2</div>
+        <p data-lingua="en">agents read: Claude Code and Codex</p><p data-lingua="it">agenti letti: Claude Code e Codex</p></div>
+      <div><div class="n mono">1</div>
+        <p data-lingua="en">file holds everything, in plain SQLite</p><p data-lingua="it">file tiene tutto, in SQLite leggibile</p></div>
+      <div><div class="n mono">20</div>
+        <p data-lingua="en">tools your agents can call back into it</p><p data-lingua="it">strumenti con cui gli agenti ci rientrano</p></div>
+    </div>
+
+    <div class="vetrina" data-sale>
+      <div class="telaio">
+        <div class="cima"><i></i><i></i><i></i><span>Plancia</span></div>
+        <img src="img/today.png" width="1600" height="1220"
+             alt="Plancia's Today view: the spoken recap, the rhythm of the last thirty days, and a list of proposals.">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------- il problema -->
+<section id="cosa-fa">
+  <div class="wrap">
+    <p class="etichetta" data-lingua="en">the problem</p>
+    <p class="etichetta" data-lingua="it">il problema</p>
+    <h2 data-lingua="en">The work is there. It is just scattered.</h2>
+    <h2 data-lingua="it">Il lavoro c'è. È solo sparpagliato.</h2>
+    <p class="guida" data-lingua="en">
+      Claude Code keeps its task list in one folder. Codex keeps its goals in a different
+      database. Your own notes are somewhere else again. None of the three knows the other
+      two exist, so at any moment you are the only integration layer, and the only one who
+      remembers what was left half done on Thursday.
+    </p>
+    <p class="guida" data-lingua="it">
+      Claude Code tiene la sua lista di task in una cartella. Codex tiene i suoi obiettivi in
+      un altro database. I tuoi appunti stanno da un'altra parte ancora. Nessuno dei tre sa
+      degli altri due, quindi l'unico punto di integrazione sei tu, e sei anche l'unico che
+      si ricorda cosa era rimasto a metà giovedì.
+    </p>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------- lavagna -->
+<section>
+  <div class="wrap doppia">
+    <div>
+      <p class="etichetta" data-lingua="en">the board</p>
+      <p class="etichetta" data-lingua="it">la lavagna</p>
+      <h2 data-lingua="en">Every open task, whoever opened it</h2>
+      <h2 data-lingua="it">Tutti i task aperti, chiunque li abbia aperti</h2>
+      <ul class="elenco">
+        <li data-lingua="en"><span class="segno">01</span><div>
+          <b>Three sources, one list</b>
+          <p>Claude Code's task lists, Codex's goals, and Plancia's own tasks, normalised to the
+             same five states and sorted by what actually needs you.</p></div></li>
+        <li data-lingua="it"><span class="segno">01</span><div>
+          <b>Tre fonti, una lista</b>
+          <p>Le liste di Claude Code, gli obiettivi di Codex e i task di Plancia, riportati agli
+             stessi cinque stati e ordinati per quello che ti serve davvero.</p></div></li>
+
+        <li data-lingua="en"><span class="segno">02</span><div>
+          <b>Write how you want it done, then dispatch</b>
+          <p>From any row: a prompt, a project, an agent. Plancia runs it in the right folder and
+             tells you how it went.</p></div></li>
+        <li data-lingua="it"><span class="segno">02</span><div>
+          <b>Scrivi come lo vuoi fatto, e mandalo</b>
+          <p>Da ogni riga: un prompt, un progetto, un agente. Plancia lo lancia nella cartella
+             giusta e ti dice com'è andata.</p></div></li>
+
+        <li data-lingua="en"><span class="segno">03</span><div>
+          <b>Plan only, unless you say otherwise</b>
+          <p>The default mode reads and reports without touching a file. Letting an agent modify
+             your code is a separate choice you make every time.</p></div></li>
+        <li data-lingua="it"><span class="segno">03</span><div>
+          <b>Guarda e propone, se non dici altro</b>
+          <p>Il modo predefinito legge e riferisce senza toccare un file. Lasciargli modificare il
+             codice è una scelta a parte, che fai ogni volta.</p></div></li>
+      </ul>
+    </div>
+    <div class="telaio" data-sale>
+      <div class="cima"><i></i><i></i><i></i><span>Board</span></div>
+      <img src="img/board.png" width="1600" height="1220"
+           alt="The board: tasks from claude, codex and plancia in one list, each with a dispatch button.">
+    </div>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------- riepilogo -->
+<section>
+  <div class="wrap doppia rovescia">
+    <div>
+      <p class="etichetta" data-lingua="en">the recap</p>
+      <p class="etichetta" data-lingua="it">il riepilogo</p>
+      <h2 data-lingua="en">A recap that ends with a decision</h2>
+      <h2 data-lingua="it">Un riepilogo che finisce con una decisione</h2>
+      <ul class="elenco">
+        <li data-lingua="en"><span class="segno">01</span><div>
+          <b>Told, not listed</b>
+          <p>Your day in a paragraph, in your language, out loud if you want. Italian, English,
+             Spanish, French, German, Portuguese.</p></div></li>
+        <li data-lingua="it"><span class="segno">01</span><div>
+          <b>Raccontato, non elencato</b>
+          <p>La giornata in un paragrafo, nella tua lingua, a voce se vuoi. Italiano, inglese,
+             spagnolo, francese, tedesco, portoghese.</p></div></li>
+
+        <li data-lingua="en"><span class="segno">02</span><div>
+          <b>Proposals come from signals, never from a hunch</b>
+          <p>A failed run, a Codex goal out of quota, seven files uncommitted since yesterday, an
+             approved post that never went out. No signal, no proposal.</p></div></li>
+        <li data-lingua="it"><span class="segno">02</span><div>
+          <b>Le proposte nascono dai segnali, mai da un'intuizione</b>
+          <p>Un lancio fallito, un obiettivo di Codex senza quota, sette file non committati da
+             ieri, un post approvato e mai uscito. Se il segnale non c'è, la proposta non c'è.</p></div></li>
+
+        <li data-lingua="en"><span class="segno">03</span><div>
+          <b>Say "do it"</b>
+          <p>⌥Space from any app opens the voice panel. It listens continuously and works out from
+             the silence when you are done. Questions about your own data answer in a tenth of a
+             second, with no model involved.</p></div></li>
+        <li data-lingua="it"><span class="segno">03</span><div>
+          <b>Dì "fallo"</b>
+          <p>⌥Spazio da qualsiasi app apre il pannello vocale. Ascolta di continuo e capisce dal
+             silenzio quando hai finito. Le domande sui tuoi dati rispondono in un decimo di
+             secondo, senza chiamare nessun modello.</p></div></li>
+      </ul>
+    </div>
+    <div class="telaio" data-sale>
+      <div class="cima"><i></i><i></i><i></i><span>Projects</span></div>
+      <img src="img/projects.png" width="1600" height="1220"
+           alt="The projects view: each project with its sessions, commits and next step.">
+    </div>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------- dati -->
+<section id="dati">
+  <div class="wrap">
+    <p class="etichetta" data-lingua="en">your data</p>
+    <p class="etichetta" data-lingua="it">i tuoi dati</p>
+    <h2 data-lingua="en">Everything it knows, and where it read it</h2>
+    <h2 data-lingua="it">Tutto quello che sa, e dove l'ha letto</h2>
+    <p class="guida" data-lingua="en">
+      Plancia has no server, no account and no telemetry. It reads files you already have and
+      writes one SQLite database you can open with any tool. This is the whole list, and since
+      the source is public you can check it rather than believe it.
+    </p>
+    <p class="guida" data-lingua="it">
+      Plancia non ha un server, non ha un account e non manda telemetria. Legge file che hai già e
+      scrive un database SQLite che puoi aprire con qualsiasi strumento. Questa è la lista intera,
+      e siccome il sorgente è pubblico puoi controllarla invece di crederci.
+    </p>
+
+    <table class="provenienza">
+      <thead>
+        <tr data-lingua="en"><th>reads</th><th>what it takes</th><th>writes</th></tr>
+        <tr data-lingua="it"><th>legge</th><th>cosa ne prende</th><th>scrive</th></tr>
+      </thead>
+      <tbody>
+        <tr data-lingua="en">
+          <td class="percorso">~/.claude/projects/</td>
+          <td class="verso">session titles, counts, tokens, tools used</td>
+          <td>never</td></tr>
+        <tr data-lingua="it">
+          <td class="percorso">~/.claude/projects/</td>
+          <td class="verso">titoli delle sessioni, conteggi, token, strumenti usati</td>
+          <td>mai</td></tr>
+
+        <tr data-lingua="en">
+          <td class="percorso">~/.claude/tasks/</td>
+          <td class="verso">open task lists</td><td>never</td></tr>
+        <tr data-lingua="it">
+          <td class="percorso">~/.claude/tasks/</td>
+          <td class="verso">le liste di task aperte</td><td>mai</td></tr>
+
+        <tr data-lingua="en">
+          <td class="percorso">~/.codex/sessions/</td>
+          <td class="verso">Codex sessions and goals, the same way</td><td>never</td></tr>
+        <tr data-lingua="it">
+          <td class="percorso">~/.codex/sessions/</td>
+          <td class="verso">sessioni e obiettivi di Codex, allo stesso modo</td><td>mai</td></tr>
+
+        <tr data-lingua="en">
+          <td class="percorso">your git repos</td>
+          <td class="verso">commit subjects, branch, how many files are dirty</td><td>never</td></tr>
+        <tr data-lingua="it">
+          <td class="percorso">i tuoi repo git</td>
+          <td class="verso">oggetto dei commit, ramo, quanti file sono da committare</td><td>mai</td></tr>
+
+        <tr data-lingua="en">
+          <td class="percorso">~/.plancia/plancia.db</td>
+          <td class="verso">the archive it builds from all of the above</td><td>yes, only here</td></tr>
+        <tr data-lingua="it">
+          <td class="percorso">~/.plancia/plancia.db</td>
+          <td class="verso">l'archivio che costruisce con tutto il resto</td><td>sì, solo qui</td></tr>
+
+        <tr data-lingua="en">
+          <td class="percorso">~/.plancia/eventi.jsonl</td>
+          <td class="verso">an append-only log other tools can subscribe to</td><td>yes, only here</td></tr>
+        <tr data-lingua="it">
+          <td class="percorso">~/.plancia/eventi.jsonl</td>
+          <td class="verso">un registro in append a cui altri strumenti si possono agganciare</td><td>sì, solo qui</td></tr>
+      </tbody>
+    </table>
+
+    <p class="postilla" style="margin-top:24px">
+      <span data-lingua="en">The one thing that does leave: when you ask for a written recap or send work to an
+        agent, that runs your own <code>claude</code> or <code>codex</code> command line, with your
+        own subscription. Plancia never holds an API key.</span>
+      <span data-lingua="it">L'unica cosa che esce: quando chiedi un riepilogo scritto o mandi un lavoro a un
+        agente, gira la tua riga di comando <code>claude</code> o <code>codex</code>, con il tuo
+        abbonamento. Plancia non tiene nessuna chiave API.</span>
+    </p>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------- prezzo -->
+<section id="prezzo">
+  <div class="wrap">
+    <p class="etichetta" data-lingua="en">price</p>
+    <p class="etichetta" data-lingua="it">prezzo</p>
+    <h2 data-lingua="en">Free if you build it. Pay if you want it built.</h2>
+    <h2 data-lingua="it">Gratis se te lo compili. A pagamento se lo vuoi già pronto.</h2>
+    <p class="guida" data-lingua="en">
+      The source is the whole program, under the GPL, forever. What costs money is the part
+      that costs me: a signed and notarised build that opens with a double click, and the work
+      of keeping it alive.
+    </p>
+    <p class="guida" data-lingua="it">
+      Il sorgente è tutto il programma, sotto GPL, per sempre. Quello che costa è la parte che
+      costa a me: una build firmata e notarizzata che si apre con un doppio clic, e il lavoro di
+      tenerla viva.
+    </p>
+
+    <div class="prezzi">
+      <div class="prezzo">
+        <h3 data-lingua="en">From source</h3>
+        <h3 data-lingua="it">Dal sorgente</h3>
+        <div class="cifra">€0</div>
+        <p class="nota" data-lingua="en">Two commands. Same program, no asterisks.</p>
+        <p class="nota" data-lingua="it">Due comandi. Lo stesso programma, senza asterischi.</p>
+        <ul>
+          <li data-lingua="en">Every feature, no time limit</li>
+          <li data-lingua="it">Tutte le funzioni, senza scadenza</li>
+          <li data-lingua="en">You compile the Mac app yourself with <code>mac/build.sh</code></li>
+          <li data-lingua="it">L'app Mac te la compili con <code>mac/build.sh</code></li>
+          <li data-lingua="en">macOS will ask you to allow it the first time</li>
+          <li data-lingua="it">macOS ti chiederà di autorizzarla la prima volta</li>
+        </ul>
+        <a class="btn" href="https://github.com/eugenionerelli/plancia#install">
+          <span data-lingua="en">Read the install steps</span>
+          <span data-lingua="it">Vedi come si installa</span>
+        </a>
+      </div>
+
+      <div class="prezzo scelto">
+        <h3 data-lingua="en">Signed build</h3>
+        <h3 data-lingua="it">Build firmata</h3>
+        <div class="cifra">€15 <small data-lingua="en">pay what you want, from €5</small><small data-lingua="it">quanto vuoi, da €5</small></div>
+        <p class="nota" data-lingua="en">One payment. No subscription, no account, no licence server.</p>
+        <p class="nota" data-lingua="it">Un pagamento solo. Nessun abbonamento, nessun account, nessun server di licenze.</p>
+        <ul>
+          <li data-lingua="en">Opens with a double click, signed and notarised by Apple</li>
+          <li data-lingua="it">Si apre con un doppio clic, firmata e notarizzata da Apple</li>
+          <li data-lingua="en">Updates in place, for this major version</li>
+          <li data-lingua="it">Si aggiorna da sola, per questa versione maggiore</li>
+          <li data-lingua="en">It pays for the certificate, and for the next feature</li>
+          <li data-lingua="it">Paga il certificato, e la prossima funzione</li>
+        </ul>
+        <a class="btn primo" href="PAGAMENTO" data-pagamento>
+          <span data-lingua="en">Get the signed build</span>
+          <span data-lingua="it">Prendi la build firmata</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ------------------------------------------------------------- domande -->
+<section>
+  <div class="wrap">
+    <p class="etichetta" data-lingua="en">questions</p>
+    <p class="etichetta" data-lingua="it">domande</p>
+    <h2 data-lingua="en">The obvious ones</h2>
+    <h2 data-lingua="it">Quelle ovvie</h2>
+
+    <div class="domande">
+      <details class="domanda">
+        <summary><span data-lingua="en">If it is open source, why would I pay?</span><span data-lingua="it">Se è open source, perché dovrei pagare?</span></summary>
+        <p data-lingua="en">You would not, if you are happy compiling it. That path stays complete and free, and
+          this is not a crippled build: the paid one is the same code. What you buy is the signing
+          certificate Apple charges me for every year, the notarisation, and the fact that someone
+          keeps fixing it. Ardour and Krita have worked this way for years.</p>
+        <p data-lingua="it">Non pagheresti, se sei contento di compilartelo. Quella strada resta completa e
+          gratis, e non è una versione mutilata: quella a pagamento è lo stesso codice. Quello che
+          compri è il certificato di firma che Apple mi fa pagare ogni anno, la notarizzazione, e il
+          fatto che qualcuno continui a sistemarlo. Ardour e Krita funzionano così da anni.</p>
+      </details>
+
+      <details class="domanda">
+        <summary><span data-lingua="en">Does anything I write ever leave my machine?</span><span data-lingua="it">Esce mai qualcosa che scrivo dalla mia macchina?</span></summary>
+        <p data-lingua="en">Not through Plancia. It has no network client of its own beyond an optional GitHub
+          call for your public repo list, which you can leave off. When you ask for a written recap
+          it runs the <code>claude</code> command you already have, so that text goes wherever your
+          own subscription already sends it, and nowhere else.</p>
+        <p data-lingua="it">Non attraverso Plancia. Non ha un client di rete suo, a parte una chiamata a GitHub
+          per l'elenco dei tuoi repo pubblici, che puoi lasciare spenta. Quando chiedi un riepilogo
+          scritto gira il comando <code>claude</code> che hai già, quindi quel testo va dove lo manda
+          già il tuo abbonamento, e da nessun'altra parte.</p>
+      </details>
+
+      <details class="domanda">
+        <summary><span data-lingua="en">Can it change my files on its own?</span><span data-lingua="it">Può cambiare i miei file da solo?</span></summary>
+        <p data-lingua="en">Only if you pick the mode that says so, on that dispatch, that time. Everything
+          else, the voice and the recap and the proposals, reads and reports. The button that lets an agent
+          write turns red before you press it.</p>
+        <p data-lingua="it">Solo se scegli il modo che lo dice, su quel lancio, quella volta. Tutto il resto,
+          la voce e il riepilogo e le proposte, legge e riferisce. Il bottone che lascia scrivere un
+          agente diventa rosso prima che tu lo prema.</p>
+      </details>
+
+      <details class="domanda">
+        <summary><span data-lingua="en">Do I need Claude Code and Codex both?</span><span data-lingua="it">Mi servono sia Claude Code sia Codex?</span></summary>
+        <p data-lingua="en">No. Each source is optional: with only one installed you get one column instead of
+          two, and everything else works the same.</p>
+        <p data-lingua="it">No. Ogni fonte è opzionale: con uno solo installato hai una colonna invece di due, e
+          tutto il resto funziona uguale.</p>
+      </details>
+
+      <details class="domanda">
+        <summary><span data-lingua="en">Windows? Linux?</span><span data-lingua="it">Windows? Linux?</span></summary>
+        <p data-lingua="en">The server, the board and the recap are plain Python and already run anywhere Python
+          runs, browser included. Only the native app, the menu bar and the voice panel are macOS.</p>
+        <p data-lingua="it">Il server, la lavagna e il riepilogo sono Python puro e girano già ovunque giri
+          Python, browser compreso. Sono macOS solo l'app nativa, la barra dei menu e il pannello
+          vocale.</p>
+      </details>
+
+      <details class="domanda">
+        <summary><span data-lingua="en">How do other tools plug into it?</span><span data-lingua="it">Come ci si aggancia da altri strumenti?</span></summary>
+        <p data-lingua="en">Two ways. Twenty MCP tools, so Claude Code and Codex can read and write the archive
+          from inside a session; and an append-only event log at <code>~/.plancia/eventi.jsonl</code>,
+          one JSON line per event, so anything else can follow along by keeping a bookmark.</p>
+        <p data-lingua="it">In due modi. Venti strumenti MCP, così Claude Code e Codex leggono e scrivono
+          l'archivio da dentro una sessione; e un registro in append in
+          <code>~/.plancia/eventi.jsonl</code>, una riga JSON per evento, così qualsiasi altra cosa
+          può seguirlo tenendo un segnalibro.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <a href="https://github.com/eugenionerelli/plancia">GitHub</a>
+    <a href="https://github.com/eugenionerelli/plancia/blob/main/LICENSE">GPL-3.0</a>
+    <a href="https://github.com/eugenionerelli/plancia/issues">
+      <span data-lingua="en">Report something</span><span data-lingua="it">Segnala qualcosa</span></a>
+    <span class="firma">Eugenio Nerelli · 2026</span>
+  </div>
+</footer>
+
+<script>
+// La lingua: quella salvata, se no quella del browser, se no inglese.
+(function () {
+  var salvata = null;
+  try { salvata = localStorage.getItem('plancia-lingua'); } catch (e) {}
+  var lingua = salvata || ((navigator.language || 'en').slice(0, 2) === 'it' ? 'it' : 'en');
+  imposta(lingua);
+
+  function imposta(l) {
+    document.documentElement.lang = l;
+    document.querySelectorAll('.lingua button').forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.dataset.imposta === l));
+    });
+    try { localStorage.setItem('plancia-lingua', l); } catch (e) {}
+  }
+
+  document.querySelectorAll('.lingua button').forEach(function (b) {
+    b.addEventListener('click', function () { imposta(b.dataset.imposta); });
+  });
+
+  // la barra si stacca dallo sfondo solo quando si è scesi
+  var barra = document.querySelector('header.barra');
+  var segnaBarra = function () { barra.classList.toggle('attaccata', window.scrollY > 8); };
+  segnaBarra();
+  addEventListener('scroll', segnaBarra, { passive: true });
+
+  // entrata: una volta sola, e solo per le immagini grandi
+  var osservatore = new IntersectionObserver(function (voci) {
+    voci.forEach(function (v) {
+      if (v.isIntersecting) { v.target.classList.add('visto'); osservatore.unobserve(v.target); }
+    });
+  }, { rootMargin: '0px 0px -12% 0px' });
+  document.querySelectorAll('[data-sale]').forEach(function (n) { osservatore.observe(n); });
+})();
+</script>
+</body>
+</html>

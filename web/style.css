@@ -368,6 +368,7 @@ textarea { resize: vertical; min-height: 66px; font-family: var(--sans); line-he
   margin-right: 5px; vertical-align: 1px; background: var(--claude);
 }
 .tag.agente.codex::before { background: var(--codex); }
+.tag.agente.plancia::before { background: var(--nominal); }
 
 .prio { width: 2px; align-self: stretch; border-radius: 2px; background: var(--line-strong); flex: none; }
 .prio.p1 { background: var(--alarm); }

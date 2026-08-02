@@ -4,7 +4,7 @@ non divergono mai.
 
 import json
 
-from . import briefing, store
+from . import briefing, eventi, store
 
 TASK_STATES = ["aperto", "in corso", "bloccato", "fatto", "archiviato"]
 POST_STATES = ["idea", "bozza", "approvato", "programmato", "pubblicato", "scartato"]
@@ -13,6 +13,14 @@ PROJECT_STATES = ["attivo", "in pausa", "concluso", "idea", "archiviato"]
 
 class BadInput(ValueError):
     pass
+
+
+def _chiave(conn, project_id):
+    """La chiave del progetto, che è quello che serve a chi legge da fuori."""
+    if not project_id:
+        return None
+    r = conn.execute("SELECT key FROM projects WHERE id=?", (project_id,)).fetchone()
+    return r["key"] if r else None
 
 
 def _project_id(conn, ident):
@@ -49,6 +57,7 @@ def task_add(conn, title, body="", project=None, priority=2, due=None, tags="",
     tid = cur.lastrowid
     store.add_event(conn, ts, "task", f"task creato: {title}", body[:200], pid,
                     f"task:{tid}", source, dedup=f"task-new:{tid}")
+    eventi.scrivi("task.creato", title, _chiave(conn, pid), {"id": tid, "fonte": source})
     _after_write(conn)
     return task_get(conn, tid)
 
@@ -93,6 +102,8 @@ def task_update(conn, tid, **fields) -> dict:
     if fields.get("status") == "fatto":
         store.add_event(conn, ts, "task", f"task chiuso: {row['title']}", "",
                         row["project_id"], f"task:{tid}", "plancia", dedup=f"task-done:{tid}")
+        eventi.scrivi("task.chiuso", row["title"], _chiave(conn, row["project_id"]),
+                      {"id": tid})
     _after_write(conn)
     return row
 
@@ -187,6 +198,8 @@ def post_update(conn, oid, **fields) -> dict:
         store.add_event(conn, ts, "post", f"pubblicato su {row['platform']}: {row['text'][:60]}",
                         row["url"] or "", row["project_id"], f"post:{oid}", "plancia",
                         dedup=f"post-pub:{oid}")
+        eventi.scrivi("post.pubblicato", row["text"][:120], _chiave(conn, row["project_id"]),
+                      {"id": oid, "piattaforma": row["platform"], "url": row["url"]})
     _after_write(conn)
     return row
 
@@ -232,6 +245,11 @@ def project_update(conn, ident, **fields) -> dict:
         return dict(row)
     values.extend([store.now(), row["id"]])
     conn.execute(f"UPDATE projects SET {', '.join(updates)}, updated_at=? WHERE id=?", values)
+    if fields.get("status") == "archiviato":
+        eventi.scrivi("progetto.archiviato", row["name"], row["key"], {})
+    elif fields.get("next_action"):
+        eventi.scrivi("progetto.aggiornato", row["name"], row["key"],
+                      {"prossimo_passo": fields["next_action"]})
     _after_write(conn)
     return dict(conn.execute("SELECT * FROM projects WHERE id=?", (row["id"],)).fetchone())
 

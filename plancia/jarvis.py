@@ -12,7 +12,7 @@ indovinare, si passa a Claude.
 
 import re
 
-from . import actions, agente, recap, risposte, store
+from . import actions, agente, cantiere, proposte, recap, risposte, store
 
 # --------------------------------------------------------------------------
 # comandi riconosciuti al volo
@@ -42,6 +42,16 @@ MODELLI = {
         r"^(?:give me |read me )?(?:the )?(?:daily )?recap\b",
         r"^how did (?:the day|today) go",
         r"^(?:dame |l[eé]eme )?el resumen\b",
+    ],
+    "fallo": [
+        r"^(?:fallo|falla|s[iì](?:,? fallo| grazie)?|procedi|vai|ok(?:,? procedi)?|d'accordo)\b(.*)$",
+        r"^(?:do it|yes(?:,? do it)?|go ahead|proceed)\b(.*)$",
+        r"^(?:hazlo|s[ií](?:,? hazlo)?|adelante)\b(.*)$",
+        r"^(?:la |il )?(prima|primo|seconda|secondo|terza|terzo)\b(.*)$",
+    ],
+    "eseguilo": [
+        r"^(?:esegui(?:lo|la)?|fallo davvero|fallo per davvero|fallo e basta)\b(.*)$",
+        r"^(?:actually do it|really do it|execute it)\b(.*)$",
     ],
     "aggiorna": [r"^(?:aggiorna|sincronizza|rileggi)\b", r"^(?:refresh|sync|update)\b",
                  r"^(?:actualiza|sincroniza)\b"],
@@ -80,6 +90,10 @@ RISPOSTE = {
         "archiviato": "Archiviato {nome}. Non lo segnalo più.",
         "riaperto": "{nome} torna attivo.",
         "progetto_non_trovato": "Non trovo un progetto che si chiami {nome}.",
+        "niente_proposte": "Non ho niente in sospeso da proporti. Chiedimi il riepilogo.",
+        "mandato": "Mando {chi} a vedere: {cosa}. Ti dico com'è andata.",
+        "mandato_esegui": "Mando {chi} a farlo davvero: {cosa}.",
+        "fatto_proposta": "Fatto.",
         "nessun_task": "Non hai task aperti.",
         "non_capito": "Non ho capito.",
     },
@@ -93,6 +107,10 @@ RISPOSTE = {
         "archiviato": "Archived {nome}. I will stop bringing it up.",
         "riaperto": "{nome} is active again.",
         "progetto_non_trovato": "I cannot find a project called {nome}.",
+        "niente_proposte": "Nothing pending to suggest. Ask me for the recap.",
+        "mandato": "Sending {chi} to look at: {cosa}. I will tell you how it went.",
+        "mandato_esegui": "Sending {chi} to actually do it: {cosa}.",
+        "fatto_proposta": "Done.",
         "nessun_task": "You have no open tasks.",
         "non_capito": "I did not catch that.",
     },
@@ -106,6 +124,10 @@ RISPOSTE = {
         "archiviato": "Archivado {nome}. No lo vuelvo a mencionar.",
         "riaperto": "{nome} vuelve a estar activo.",
         "progetto_non_trovato": "No encuentro un proyecto que se llame {nome}.",
+        "niente_proposte": "No tengo nada pendiente que proponerte. Pídeme el resumen.",
+        "mandato": "Mando a {chi} a mirar: {cosa}. Te digo cómo ha ido.",
+        "mandato_esegui": "Mando a {chi} a hacerlo de verdad: {cosa}.",
+        "fatto_proposta": "Hecho.",
         "nessun_task": "No tienes tareas abiertas.",
         "non_capito": "No te he entendido.",
     },
@@ -190,6 +212,47 @@ def chiedi_a_claude(frase: str, lang: str, parole=55) -> str:
     return (res.stdout or "").strip() if res.returncode == 0 else ""
 
 
+def _esegui_proposta(conn, scelta, d, lang, forza_esecuzione=False) -> dict:
+    """Trasforma una proposta in un fatto.
+
+    Il modo resta quello scritto nella proposta, cioè proposta, a meno che tu
+    non abbia detto esplicitamente di eseguire. Una frase come "fallo" non deve
+    mai finire per modificare file da sola.
+    """
+    a = scelta.get("azione") or {}
+    tipo = a.get("tipo")
+
+    if tipo == "vai":
+        return {"tipo": "vai", "risposta": d["vai"].format(vista=a.get("vista", "")),
+                "azione": {"tipo": "vai", "vista": a.get("vista", "oggi")}}
+
+    if tipo == "rilancia":
+        r = conn.execute("SELECT prompt, agente, modo, cwd, task_id FROM runs WHERE id=?",
+                         (a.get("run"),)).fetchone()
+        if not r:
+            return {"tipo": "proposta", "risposta": d["niente_proposte"]}
+        modo = "esegui" if forza_esecuzione else r["modo"]
+        esito = cantiere.avvia(conn, r["prompt"][:200], agente=r["agente"], modo=modo,
+                               cwd=r["cwd"], task_id=r["task_id"], lingua=lang)
+        return {"tipo": "cantiere",
+                "risposta": d["mandato"].format(chi=r["agente"], cosa=scelta["testo"][:60]),
+                "azione": {"tipo": "vai", "vista": "oggi"}, "run": esito["run"]}
+
+    if tipo == "manda":
+        modo = "esegui" if forza_esecuzione else a.get("modo", "proposta")
+        agente_scelto = a.get("agente", "claude")
+        esito = cantiere.avvia(conn, a.get("titolo", scelta["testo"])[:200],
+                               progetto=a.get("progetto"), agente=agente_scelto,
+                               modo=modo, task_id=a.get("task_id"), lingua=lang)
+        chiave = "mandato_esegui" if modo == "esegui" else "mandato"
+        return {"tipo": "cantiere",
+                "risposta": d[chiave].format(chi=agente_scelto,
+                                             cosa=a.get("titolo", "")[:70]),
+                "azione": {"tipo": "vai", "vista": "oggi"}, "run": esito["run"]}
+
+    return {"tipo": "proposta", "risposta": d["fatto_proposta"]}
+
+
 # --------------------------------------------------------------------------
 # ingresso unico
 # --------------------------------------------------------------------------
@@ -219,6 +282,13 @@ def esegui(testo: str, lang=None, conn=None) -> dict:
             if riga:
                 return {"tipo": "vai", "risposta": d["vai"].format(vista=riga["name"]),
                         "azione": {"tipo": "progetto", "chiave": riga["key"]}}
+
+        if comando in ("fallo", "eseguilo"):
+            scelta = proposte.scegli(conn, arg or None)
+            if not scelta:
+                return {"tipo": "proposta", "risposta": d["niente_proposte"]}
+            return _esegui_proposta(conn, scelta, d, lang,
+                                    forza_esecuzione=(comando == "eseguilo"))
 
         if comando in ("archivia", "riapri_progetto") and arg:
             riga = store.get_project(conn, arg)

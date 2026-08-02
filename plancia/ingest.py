@@ -759,8 +759,9 @@ def sync(full=False, progress=None, skip_git=False, modo="tutto") -> dict:
     if caldo:
         result["hook"] = drain_queue(conn, progress)
         result["sessioni"] = sync_sessions(conn, keywords, progress, full=full)
-        from . import codex
+        from . import codex, lavagna
         result["codex"] = codex.sync(conn, keywords, progress, full=full)
+        result["lavagna"] = lavagna.sync(conn, progress)
 
     if freddo:
         result["memoria"] = sync_memory(conn, progress)

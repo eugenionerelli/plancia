@@ -83,7 +83,18 @@ const EN = {
   'ricerca': 'research', 'personale': 'personal', 'metodo': 'method',
   'sessione aperta': 'session opened', 'sessione chiusa': 'session closed',
   'Agenti': 'Agents', 'scambio': 'handoff', 'scambi': 'handoffs',
-  'Archivio': 'Archive', 'turni': 'turns', "tutto quello che è già successo": 'everything that already happened',
+  'Archivio': 'Archive', 'turni': 'turns',
+  'Lavagna': 'Board', 'Guida': 'Guide', 'tutti': 'all', 'tutte': 'all', 'dettaglio': 'detail', 'esito': 'outcome', 'tutti i task aperti, di tutti gli agenti': 'every open task, every agent',
+  'fonte': 'source', 'manda': 'dispatch', 'Manda a un agente': 'Dispatch to an agent',
+  'Come lo voglio fatto': 'How I want it done', 'proposta': 'plan only', 'esegui': 'do it',
+  'guarda e propone, non tocca niente': 'reads and plans, touches nothing',
+  'può modificare i file del progetto': 'can modify the project files',
+  'In lavorazione': 'Running', 'Lanci recenti': 'Recent runs',
+  'riuscito': 'done', 'fallito': 'failed', 'in coda': 'queued', 'annullato': 'cancelled',
+  'Cosa converrebbe fare': 'What is worth doing', 'fallo': 'do it',
+  'niente in sospeso': 'nothing pending', 'nessun task aperto da nessuna parte': 'no open task anywhere',
+  'Il lavoro': 'The work', 'annulla': 'cancel', 'apri il registro': 'open the log',
+  'lanci': 'runs', 'mandato': 'dispatched', "tutto quello che è già successo": 'everything that already happened',
   'i due agenti sullo stesso archivio': 'both agents, one archive',
   'sessioni tue': 'your turns', 'token generati': 'tokens out',
   'chiamate a tool': 'tool calls', 'primo lavoro': 'first seen',
@@ -206,7 +217,7 @@ const statusClass = {
 const views = {};
 
 views.oggi = async () => {
-  const d = state.overview = await api('/api/overview');
+  const d = state.overview = await api('/api/overview?lang=' + UILANG);
   const riepilogo = await bloccoRiepilogo(true);
   const s = d.stats;
   const attivi = d.progetti.filter((p) => p.status === 'attivo');
@@ -244,6 +255,23 @@ views.oggi = async () => {
     ${cella(s.post_in_coda, T('post in coda'), 'quiet',
        s.post_pubblicati ? `${s.post_pubblicati} ${T('pubblicati')}` : '')}
   </div>
+
+  ${(d.proposte || []).length ? `
+  <div class="panel" data-in="3" style="margin-bottom:var(--s3)">
+    <header><h3>${T('Cosa converrebbe fare')}</h3><span class="spacer"></span>
+      <span class="tag mono">${d.proposte.length}</span></header>
+    <div class="panel-body tight">
+      ${d.proposte.map((p, i) => `
+        <div class="row">
+          <div class="prio p${p.urgenza < 2 ? 1 : p.urgenza < 4 ? 2 : 3}"></div>
+          <div class="main"><div class="title">${esc(p.testo)}</div></div>
+          <div class="side">
+            <button class="mini go" data-act="proposta" data-frase="${i === 0 ? 'fallo' : ['', 'la seconda', 'la terza', 'la quarta'][i] || 'fallo'}"
+              data-testo="${esc(p.testo)}">${T('fallo')}</button>
+          </div>
+        </div>`).join('')}
+    </div>
+  </div>` : ''}
 
   <div class="grid cols-2" data-in="4">
     <div style="display:flex;flex-direction:column;gap:var(--s3)">
@@ -391,13 +419,12 @@ const SUGGERIMENTI = {
 
 async function bloccoRiepilogo(soloCorpo) {
   const r = state.recap || (state.recap = { lang: '', data: null, qa: [], voce: null });
-  if (!r.lang) {
-    try { r.lang = (await api('/api/voice/status')).lingua || UILANG; }
-    catch (e) { r.lang = UILANG; }
-  }
+  // Una lingua sola per superficie: quella scelta col selettore. La lingua
+  // della configurazione resta per il riepilogo che parte da solo la mattina,
+  // quando nessuno sta guardando l'interfaccia.
+  r.lang = UILANG;
   const lingue = ['it', 'en', 'es', 'fr', 'de', 'pt'];
   const attiva = r.lang || 'it';
-  const d = r.data;
 
   // Se c'è in cache si dipinge subito; altrimenti si genera in sottofondo.
   let daRinfrescare = false;
@@ -409,6 +436,9 @@ async function bloccoRiepilogo(soloCorpo) {
     } catch (e) { daRinfrescare = true; }
   }
   if (daRinfrescare) setTimeout(() => { if (!state.recap.inCorso) generaRecap(); }, 60);
+  // Si legge dopo il recupero, non prima: letto prima si dipingeva sempre
+  // l'attesa e il testo in cache compariva solo al giro dopo.
+  const d = r.data;
 
   return `
   ${soloCorpo ? '' : `<div class="view-head">
@@ -645,8 +675,234 @@ views.archivio = async () => {
   <div data-in="1">${corpo}</div>`;
 };
 
+
+
+/* ---------------------------------------------------------------- benvenuto */
+const PASSI = [
+  {
+    t: { it: "Plancia legge, non raccoglie", en: "Plancia reads, it does not collect" },
+    c: {
+      it: "Tutto quello che vedi qui viene da file che hai già sul disco: i transcript di Claude Code, quelli di Codex, la memoria, i tuoi repo. Niente esce dalla macchina, non c'è telemetria, il database è un file solo in ~/.plancia. Puoi leggerlo con qualsiasi strumento SQLite.",
+      en: "Everything here comes from files already on your disk: Claude Code transcripts, Codex ones, memory, your repos. Nothing leaves the machine, there is no telemetry, and the database is a single file in ~/.plancia you can open with any SQLite tool.",
+    },
+    prova: null,
+  },
+  {
+    t: { it: "La lavagna: tutti i task, di tutti", en: "The board: every task, every agent" },
+    c: {
+      it: "Claude Code tiene la sua lista di task in una cartella, Codex i suoi obiettivi in un database, Plancia i suoi. Nessuno dei tre sa degli altri. La lavagna li mette insieme e ti dice cosa è aperto davvero, adesso.",
+      en: "Claude Code keeps its task list in a folder, Codex keeps its goals in a database, Plancia has its own. None of them knows about the others. The board puts them together and tells you what is actually open right now.",
+    },
+    prova: { etichetta: { it: "Apri la lavagna", en: "Open the board" }, vista: "lavagna" },
+  },
+  {
+    t: { it: "Il riepilogo, e le cose da fare", en: "The recap, and what is worth doing" },
+    c: {
+      it: "Una volta al giorno Plancia legge cosa è successo e te lo racconta come lo diresti a voce, non come un elenco. Poi guarda i segnali (un lancio fallito, un obiettivo bloccato, modifiche non committate) e ti propone la cosa più sensata da fare. A quel punto basta dire fallo.",
+      en: "Once a day Plancia reads what happened and tells it the way you would say it, not as a list. Then it looks at the signals (a failed run, a stuck goal, uncommitted changes) and suggests the most sensible next thing. Then you just say do it.",
+    },
+    prova: { etichetta: { it: "Vedi il riepilogo", en: "See the recap" }, vista: "oggi" },
+  },
+  {
+    t: { it: "Parlargli: ⌥Spazio", en: "Talking to it: ⌥Space" },
+    c: {
+      it: "Da qualsiasi app, ⌥Spazio apre il pannello vocale. Ascolta di continuo e capisce dal silenzio quando hai finito. Le domande sui tuoi dati rispondono in un decimo di secondo senza chiamare nessun modello; il resto passa da Claude, che ha i tool di Plancia aperti e quindi può fare le cose, non solo dirle.",
+      en: "From any app, ⌥Space opens the voice panel. It listens continuously and works out from the silence when you are done. Questions about your data answer in a tenth of a second with no model involved; everything else goes to Claude, which has Plancia's tools open and can actually do things, not just talk about them.",
+    },
+    prova: null,
+  },
+  {
+    t: { it: "Mandare un lavoro a un agente", en: "Dispatching work to an agent" },
+    c: {
+      it: "Da ogni riga della lavagna puoi scrivere come vuoi che sia fatta e mandarla a Claude o a Codex. Il modo predefinito è proposta: l'agente legge e ti dice cosa farebbe, senza toccare niente. Esegui lo lascia modificare i file, e va scelto ogni volta.",
+      en: "From any row on the board you can write how you want it done and dispatch it to Claude or Codex. The default mode is plan only: the agent reads and tells you what it would do, touching nothing. Do it lets it modify files, and you choose that every single time.",
+    },
+    prova: { etichetta: { it: "Prova il compositore", en: "Try the composer" }, azione: "manda-nuovo" },
+  },
+];
+
+views.benvenuto = async () => {
+  const i = Math.min(state.passo || 0, PASSI.length - 1);
+  const p = PASSI[i];
+  const L = UILANG === 'en' ? 'en' : 'it';
+  if (!state.overview) state.overview = await api('/api/overview?lang=' + UILANG);
+  if (!state.lav) { try { state.lav = await api('/api/lavagna'); } catch (e) { state.lav = { conteggi: {} }; } }
+  const c = (state.lav && state.lav.conteggi) || {};
+  const o = state.overview.stats || {};
+  // ogni passo mostra i tuoi numeri: cosi' l'onboarding e' anche la prova che legge davvero
+  const CIFRE = [
+    [[o.progetti_attivi, L === 'en' ? 'projects read' : 'progetti letti'],
+     [(state.overview.agenti || []).length || 2, L === 'en' ? 'agents' : 'agenti'],
+     [0, L === 'en' ? 'bytes sent out' : 'byte usciti']],
+    [[(c.claude || {}).aperti || 0, 'claude'], [(c.codex || {}).aperti || 0, 'codex'],
+     [(c.plancia || {}).aperti || 0, 'plancia']],
+    null, null, null,
+  ][i];
+  return `
+  <div style="max-width:660px;margin:6vh auto 0" data-in="1">
+    <div class="label" style="margin-bottom:var(--s4)">
+      ${i + 1} / ${PASSI.length}
+      <span style="display:inline-flex;gap:4px;margin-left:var(--s3);vertical-align:middle">
+        ${PASSI.map((_, k) => `<i style="width:${k === i ? 18 : 6}px;height:3px;border-radius:2px;background:${k <= i ? 'var(--amber)' : 'var(--border)'};display:block"></i>`).join('')}
+      </span>
+    </div>
+    <h1 class="serif" style="font-size:32px;letter-spacing:-.03em;line-height:1.15">${p.t[L]}</h1>
+    <p style="font-size:16px;line-height:1.7;color:var(--muted);margin-top:var(--s4)">${p.c[L]}</p>
+    ${CIFRE ? `<div class="grid cols-3" style="margin-top:var(--s5)">
+      ${CIFRE.map(([n, e]) => `<div class="kpi"><div class="num mono">${n}</div><div class="label">${e}</div></div>`).join('')}
+    </div>` : ''}
+    <div style="display:flex;gap:var(--s2);margin-top:var(--s6);align-items:center">
+      ${i > 0 ? `<button class="ghost" data-act="passo" data-n="${i - 1}">${L === 'en' ? 'Back' : 'Indietro'}</button>` : ''}
+      ${p.prova ? `<button class="ghost" data-act="prova-passo"
+        data-vista="${p.prova.vista || ''}" data-azione="${p.prova.azione || ''}">${p.prova.etichetta[L]}</button>` : ''}
+      <span class="spacer" style="margin-left:auto"></span>
+      ${i < PASSI.length - 1
+        ? `<button class="primary" data-act="passo" data-n="${i + 1}">${L === 'en' ? 'Next' : 'Avanti'}</button>`
+        : `<button class="primary" data-act="fine-benvenuto">${L === 'en' ? 'Start using it' : 'Comincia'}</button>`}
+      <button class="mini" data-act="fine-benvenuto">${L === 'en' ? 'skip' : 'salta'}</button>
+    </div>
+  </div>`;
+};
+
+/* ---------------------------------------------------------------- lavagna */
+const FONTI = [['', 'tutti'], ['plancia', 'plancia'], ['claude', 'claude'], ['codex', 'codex']];
+
+views.lavagna = async (soloCorpo) => {
+  const f = state.filters.lavagna || (state.filters.lavagna = { fonte: '', stato: 'aperti' });
+  const [d, lanci, progetti] = await Promise.all([
+    api(`/api/lavagna?stato=${f.stato}${f.fonte ? '&fonte=' + f.fonte : ''}`),
+    api('/api/runs?limite=6'),
+    api('/api/projects'),
+  ]);
+  state.progetti = progetti;
+  const attivi = lanci.filter((r) => r.stato === 'in coda' || r.stato === 'in corso');
+
+  return `
+  ${soloCorpo ? '' : `<div class="view-head">
+    <h1>${T('Lavagna')}</h1><p>${T('tutti i task aperti, di tutti gli agenti')}</p>
+    <span class="spacer"></span>
+    <button class="ghost" data-act="manda-nuovo">${T('Manda a un agente')}</button>
+  </div>`}
+
+  <div class="filters" data-in="1">
+    ${FONTI.map(([k, etichetta]) => `<span class="chip ${f.fonte === k ? 'on' : ''}"
+      data-filter="lavagna.fonte" data-value="${k}">${k ? etichetta : T(etichetta)}${
+        k && d.conteggi[k] ? ` <b style="opacity:.6">${d.conteggi[k].aperti || 0}</b>` : ''}</span>`).join('')}
+    <span style="margin-left:auto"></span>
+    ${['aperti', 'fatto', 'tutti'].map((k) => `<span class="chip ${f.stato === k ? 'on' : ''}"
+      data-filter="lavagna.stato" data-value="${k}">${T(k)}</span>`).join('')}
+  </div>
+
+  ${attivi.length ? `<div class="panel" data-in="2" style="margin-bottom:var(--s3)">
+    <header><h3>${T('In lavorazione')}</h3><span class="spacer"></span>
+      <span class="dot busy"></span></header>
+    <div class="panel-body tight">${attivi.map(rigaLancio).join('')}</div>
+  </div>` : ''}
+
+  <div class="panel" data-in="3">
+    <div class="panel-body tight">
+      ${d.voci.map((v) => `
+        <div class="row">
+          <span class="tag agente ${v.fonte === 'codex' ? 'codex' : v.fonte === 'plancia' ? 'plancia' : ''}"
+            style="flex:none">${esc(v.fonte)}</span>
+          <div class="main">
+            <div class="title">${esc(v.titolo)}</div>
+            <div class="sub">${T(v.stato)}${v.progetto ? ' · ' + esc(v.progetto) : ''}${
+              v.aggiornato_at ? ' · ' + ago(v.aggiornato_at) : ''}</div>
+          </div>
+          <div class="side">
+            <button class="mini go" data-act="manda" data-titolo="${esc(v.titolo)}"
+              data-dettaglio="${esc((v.dettaglio || '').slice(0, 600))}"
+              data-progetto="${esc(v.progetto_chiave || '')}"
+              data-task="${v.fonte === 'plancia' ? v.task_id || '' : ''}">${T('manda')}</button>
+          </div>
+        </div>`).join('') || `<div class="empty">${T('nessun task aperto da nessuna parte')}</div>`}
+    </div>
+  </div>
+
+  ${lanci.length ? `<div class="panel" data-in="4" style="margin-top:var(--s3)">
+    <header><h3>${T('Lanci recenti')}</h3></header>
+    <div class="panel-body tight">${lanci.slice(0, 6).map(rigaLancio).join('')}</div>
+  </div>` : ''}`;
+};
+
+const STATO_LANCIO = { riuscito: 'ok', fallito: 'danger', 'in corso': 'accent',
+                       'in coda': '', annullato: '' };
+
+const rigaLancio = (r) => `
+  <div class="row" data-act="lancio" data-id="${r.id}" style="cursor:pointer">
+    <span class="tag agente ${r.agente === 'codex' ? 'codex' : ''}" style="flex:none">${esc(r.agente)}</span>
+    <div class="main">
+      <div class="title truncate">${esc(r.task || (r.prompt || '').split('\n').filter((x) =>
+        x && !x.startsWith('#'))[1] || (r.prompt || '').slice(0, 70))}</div>
+      <div class="sub">${T(r.modo)} · ${esc(r.cwd || '')}${r.token ? ' · ' + kilo(r.token) + ' token' : ''}</div>
+    </div>
+    <div class="side">
+      <span class="tag ${STATO_LANCIO[r.stato] || ''}">${T(r.stato)}</span>
+    </div>
+  </div>`;
+
+/* Il compositore: da una riga della lavagna a un prompt vero. */
+function apriCompositore(dati = {}) {
+  const progetti = state.progetti || [];
+  $('#drawer-body').innerHTML = `
+    <h2>${T('Manda a un agente')}</h2>
+    <p style="color:var(--muted);font-size:12.5px">${T('Il lavoro')}</p>
+    <form data-form="manda" style="display:flex;flex-direction:column;gap:var(--s3);margin-top:var(--s3)">
+      <input type="text" name="titolo" value="${esc(dati.titolo || '')}" placeholder="${T('Il lavoro')}" required>
+      <textarea name="istruzioni" placeholder="${T('Come lo voglio fatto')}" style="min-height:110px">${esc(dati.istruzioni || '')}</textarea>
+      <div style="display:flex;gap:var(--s2);flex-wrap:wrap">
+        <select name="progetto" style="width:190px">
+          <option value="">${T('nessun progetto')}</option>
+          ${progetti.map((p) => `<option value="${esc(p.key)}" ${p.key === dati.progetto ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
+        </select>
+        <select name="agente" style="width:130px">
+          <option value="claude">claude</option><option value="codex">codex</option>
+        </select>
+        <select name="modo" style="width:160px">
+          <option value="proposta">${T('proposta')}</option>
+          <option value="esegui">${T('esegui')}</option>
+        </select>
+        <input type="hidden" name="task_id" value="${dati.task || ''}">
+        <button class="primary" type="submit">${T('manda')}</button>
+      </div>
+      <p id="manda-nota" style="color:var(--faint);font-size:11.5px;margin:0">
+        ${T('guarda e propone, non tocca niente')}</p>
+    </form>
+    ${dati.dettaglio ? `<section><h3>${T('dettaglio')}</h3>
+      <div style="font-size:12.5px;color:var(--muted);white-space:pre-wrap">${esc(dati.dettaglio)}</div></section>` : ''}`;
+  $('#drawer').hidden = false;
+  const sel = $('#drawer-body select[name=modo]');
+  sel.addEventListener('change', () => {
+    $('#manda-nota').textContent = sel.value === 'esegui'
+      ? T('può modificare i file del progetto') : T('guarda e propone, non tocca niente');
+    $('#manda-nota').style.color = sel.value === 'esegui' ? 'var(--alarm)' : 'var(--faint)';
+  });
+}
+
+async function apriLancio(id) {
+  const d = await api('/api/runs/' + id);
+  $('#drawer-body').innerHTML = `
+    <h2>${T('lanci')} #${d.id}</h2>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:var(--s3)">
+      <span class="tag agente ${d.agente === 'codex' ? 'codex' : ''}">${esc(d.agente)}</span>
+      <span class="tag">${T(d.modo)}</span>
+      <span class="tag ${STATO_LANCIO[d.stato] || ''}">${T(d.stato)}</span>
+      ${d.token ? `<span class="tag mono">${kilo(d.token)} token</span>` : ''}
+      ${d.costo ? `<span class="tag mono">$${d.costo.toFixed(3)}</span>` : ''}
+    </div>
+    <p class="mono" style="font-size:11px;color:var(--faint)">${esc(d.cwd || '')}</p>
+    ${d.esito ? `<section><h3>${T('esito')}</h3>
+      <div style="font-size:13.5px;line-height:1.65;white-space:pre-wrap">${esc(d.esito)}</div></section>` : ''}
+    ${(d.stato === 'in corso' || d.stato === 'in coda')
+      ? `<section><button class="ghost" data-act="annulla-lancio" data-id="${d.id}">${T('annulla')}</button></section>` : ''}
+    <section><h3>${T('Il lavoro')}</h3>
+      <div style="font-size:12px;color:var(--muted);white-space:pre-wrap">${esc(d.prompt)}</div></section>`;
+  $('#drawer').hidden = false;
+}
+
 views.progetti = async () => {
-  const list = state.overview ? state.overview.progetti : (await api('/api/overview')).progetti;
+  const list = state.overview ? state.overview.progetti : (await api('/api/overview?lang=' + UILANG)).progetti;
   const groups = [['attivo', T('attivo')], ['idea', T('idea')], ['in pausa', T('in pausa')], ['concluso', T('concluso')]];
   return `
   <div class="view-head"><h1>${T('Progetti')}</h1><p>${list.length} ${T('tracciati')}</p></div>
@@ -954,9 +1210,14 @@ async function route() {
 
 async function refreshBadges() {
   try {
-    const d = state.overview || (state.overview = await api('/api/overview'));
-    $('#badge-task').textContent = d.stats.task_aperti || '';
+    const d = state.overview || (state.overview = await api('/api/overview?lang=' + UILANG));
+    const lav = $('#badge-lavagna');
+    if (lav) lav.textContent = d.stats.lavagna_aperti || d.stats.task_aperti || '';
     $('#badge-social').textContent = d.stats.post_in_coda || '';
+    if (d.benvenuto && state.view !== 'benvenuto' && !state.benvenutoVisto) {
+      state.benvenutoVisto = true;
+      location.hash = '#/benvenuto';
+    }
   } catch (e) { /* pazienza */ }
 }
 
@@ -994,6 +1255,34 @@ document.addEventListener('click', async (ev) => {
         state.filters.task = { status: 'tutti', project: '' };
         const box = act.closest('.panel').querySelector('.panel-body');
         box.innerHTML = taskRows(await api('/api/tasks?status=tutti&limit=200'));
+      } else if (name === 'passo') {
+        state.passo = +act.dataset.n; await route();
+      } else if (name === 'prova-passo') {
+        if (act.dataset.azione === 'manda-nuovo') {
+          if (!state.progetti) state.progetti = await api('/api/projects');
+          apriCompositore({});
+        } else if (act.dataset.vista) {
+          location.hash = '#/' + act.dataset.vista;
+        }
+      } else if (name === 'fine-benvenuto') {
+        await api('/api/onboarding', { method: 'POST', body: { fatto: true } });
+        state.overview = null; location.hash = '#/oggi';
+        if (state.view === 'oggi') await route();
+      } else if (name === 'manda' || name === 'manda-nuovo') {
+        if (!state.progetti) state.progetti = await api('/api/projects');
+        apriCompositore(act.dataset);
+      } else if (name === 'lancio') {
+        await apriLancio(act.dataset.id);
+      } else if (name === 'annulla-lancio') {
+        await api('/api/runs/' + act.dataset.id + '/annulla', { method: 'POST', body: {} });
+        $('#drawer').hidden = true; await route();
+      } else if (name === 'proposta') {
+        const testo = act.dataset.testo;
+        act.disabled = true; act.textContent = '…';
+        const r = await api('/api/jarvis', { method: 'POST',
+          body: { testo: act.dataset.frase || 'fallo', lang: state.recap?.lang || '', voce: false } });
+        toast(r.risposta || T('fallo'));
+        state.overview = null; await route();
       } else if (name === 'recap-gen') {
         state.recap.data = null; await generaRecap(true);
       } else if (name === 'recap-play') {
@@ -1059,6 +1348,16 @@ document.addEventListener('submit', async (ev) => {
     } else if (form.dataset.form === 'post-new') {
       await api('/api/posts', { method: 'POST', body: data });
       toast(T('bozza salvata'));
+    } else if (form.dataset.form === 'manda') {
+      const r = await api('/api/cantiere', { method: 'POST', body: {
+        titolo: data.titolo, istruzioni: data.istruzioni, progetto: data.progetto || null,
+        agente: data.agente, modo: data.modo,
+        task_id: data.task_id ? +data.task_id : null } });
+      $('#drawer').hidden = true;
+      toast(`${T('mandato')} → ${data.agente} #${r.run}`);
+      location.hash = '#/lavagna';
+      await route();
+      return;
     } else if (form.dataset.form === 'chiedi') {
       const q = (data.domanda || '').trim();
       if (!q) return;

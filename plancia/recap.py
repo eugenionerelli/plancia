@@ -11,7 +11,7 @@ import shutil
 import subprocess
 from datetime import datetime, timedelta, timezone
 
-from . import config, store
+from . import config, proposte, store
 
 SOSTANZA = ("AND ((SELECT COUNT(*) FROM sessions s WHERE s.project_id=p.id) >= 3 OR p.id IN (SELECT project_id FROM project_links WHERE kind IN ('repo','memory')))")
 
@@ -259,7 +259,8 @@ def render_template(dati: dict, lang: str) -> str:
     if dati["progetti_fermi"]:
         frasi.append(t["fermi"].format(elenco=_elenco(
             [p["name"] for p in dati["progetti_fermi"]], lang)))
-    frasi.append(t["chiusura"])
+    prop = dati.get("proposte") or []
+    frasi.append(prop[0]["testo"] if prop else t["chiusura"])
     return " ".join(f for f in frasi if f)
 
 
@@ -281,7 +282,10 @@ Regole:
 - parla di quello che è successo davvero, non aggiungere niente che non sia nei dati
 - concreto: nomi dei progetti, cosa è cambiato, cosa resta aperto
 - se non è successo quasi niente, dillo in una riga e non riempire
-- chiudi con la cosa più sensata da riprendere adesso, e una domanda breve
+- in `cosa_converrebbe_fare` ci sono le proposte già calcolate dai dati: chiudi
+  con la prima, detta con parole tue, e falla diventare una domanda secca a cui
+  si possa rispondere "fallo". Se l'elenco è vuoto, chiudi con la cosa più
+  sensata da riprendere
 
 Dati:
 {dati}"""
@@ -357,6 +361,7 @@ def _compact(dati: dict) -> dict:
         "prossimi_passi": [{"progetto": p["name"], "passo": p["next_action"]}
                            for p in dati["prossimi_passi"]],
         "progetti_fermi": [p["name"] for p in dati["progetti_fermi"]],
+        "cosa_converrebbe_fare": [p["testo"] for p in dati.get("proposte", [])],
     }
 
 
@@ -385,6 +390,11 @@ def solo_cache(conn, lang=None) -> dict:
     firma = impronta(conn, giorno)
     fresco = store.get_meta(conn, "recap_impronta") == f"{firma}|{lang}|{giorno}"
     testo = store.get_meta(conn, "recap_testo")
+    # In cache ci sta un riepilogo solo. Se è di un'altra lingua non lo si
+    # mostra: leggere l'italiano dentro un'interfaccia inglese confonde più di
+    # quanto aiuti aspettare.
+    if testo and store.get_meta(conn, "recap_lingua", lang) != lang:
+        testo, fresco = None, False
     # Anche quando la giornata è cambiata si restituisce l'ultimo testo: meglio
     # un riepilogo di venti minuti fa, subito, che un riquadro vuoto per dieci
     # secondi. Chi chiama lo aggiorna in sottofondo.
@@ -440,6 +450,9 @@ def build(conn=None, day=None, lang=None, engine=None, parole=140, cache=True) -
                 return {"giorno": dati["giorno"], "lingua": lang,
                         "fonte": store.get_meta(conn, "recap_fonte", "cache"),
                         "testo": testo, "dati": dati, "da_cache": True}
+        prop = proposte.calcola(conn, lang)
+        proposte.salva(conn, prop)
+        dati["proposte"] = prop
         engine = engine or config.load_config().get("motore_riepilogo", "claude")
         testo, fonte = "", "modello"
         if engine == "claude":
@@ -452,6 +465,7 @@ def build(conn=None, day=None, lang=None, engine=None, parole=140, cache=True) -
             testo = render_template(dati, lang)
         store.set_meta(conn, "recap_impronta", f"{firma}|{lang}|{dati['giorno']}")
         store.set_meta(conn, "recap_testo", testo)
+        store.set_meta(conn, "recap_lingua", lang)
         store.set_meta(conn, "recap_fonte", fonte)
         conn.commit()
         return {"giorno": dati["giorno"], "lingua": lang, "fonte": fonte,

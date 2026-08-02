@@ -14,7 +14,8 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import actions, agente, briefing, config, ingest, jarvis, recap, store, voice
+from . import (actions, agente, briefing, cantiere, config, eventi, ingest,
+               jarvis, lavagna, recap, store, voice)
 
 SYNC_LOCK = threading.Lock()
 SYNC_STATE = {"running": False, "message": "", "started": None, "result": None}
@@ -45,7 +46,7 @@ def start_sync(full=False, modo="tutto") -> bool:
 # letture aggregate
 # --------------------------------------------------------------------------
 
-def overview(conn) -> dict:
+def overview(conn, lang=None) -> dict:
     week = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%SZ")
     month = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
     one = lambda sql, p=(): conn.execute(sql, p).fetchone()[0]
@@ -106,8 +107,23 @@ def overview(conn) -> dict:
         f"FROM sessions s WHERE {store.visibile()} GROUP BY agente ORDER BY token DESC"
     ).fetchall()]
 
+    try:
+        from . import lavagna as _lav
+        stats["lavagna_aperti"] = sum(
+            v.get("aperti", 0) for v in _lav.conteggi(conn).values())
+    except Exception:
+        pass
+
+    from . import proposte as _prop
+    try:
+        prop = _prop.calcola(conn, lang or config.load_config().get("lingua", "it"))
+    except Exception:
+        prop = []
+
     return {
         "stats": stats,
+        "proposte": prop,
+        "benvenuto": store.get_meta(conn, "onboarding_fatto") != "1",
         "agenti": agenti,
         "progetti": projects,
         "task": actions.tasks_list(conn, "aperti", limit=20),
@@ -246,7 +262,7 @@ class Handler(BaseHTTPRequestHandler):
         conn = store.connect()
         try:
             if path == "/api/overview":
-                return self._json(overview(conn))
+                return self._json(overview(conn, first("lang")))
             if path == "/api/briefing":
                 return self._send(200, briefing.build(conn, first("project")),
                                   "text/markdown; charset=utf-8")
@@ -300,6 +316,28 @@ class Handler(BaseHTTPRequestHandler):
                     "p.name AS progetto, p.key AS project_key FROM knowledge k "
                     "LEFT JOIN projects p ON p.id=k.project_id ORDER BY k.updated_at DESC"
                 ).fetchall()])
+            if path == "/api/proposte":
+                from . import proposte as _prop
+                lista = _prop.calcola(conn, recap.lang_or_default(first("lang")))
+                _prop.salva(conn, lista)
+                return self._json(lista)
+            if path == "/api/lavagna":
+                return self._json({
+                    "voci": lavagna.elenco(conn, first("stato", "aperti"), first("fonte"),
+                                           int(first("limite", 200))),
+                    "conteggi": lavagna.conteggi(conn),
+                    "in_corso": cantiere.in_corso(conn),
+                })
+            if path == "/api/runs":
+                return self._json(cantiere.elenco(conn, int(first("limite", 20))))
+            m = re.match(r"^/api/runs/(\d+)$", path)
+            if m:
+                d = cantiere.dettaglio(conn, int(m.group(1)))
+                return self._json(d) if d else self._error(404, "lancio inesistente")
+            if path == "/api/eventi":
+                return self._json({"eventi": eventi.leggi(first("dopo"), first("tipo"),
+                                                          int(first("limite", 100))),
+                                   "stato": eventi.stato()})
             if path == "/api/agents":
                 mese = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
                 totali = [dict(r) for r in conn.execute(
@@ -375,6 +413,22 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/voice/stop" and method == "POST":
                 voice.ferma()
                 return self._json({"fermato": True})
+            if path == "/api/onboarding" and method == "POST":
+                store.set_meta(conn, "onboarding_fatto", "1" if body.get("fatto", True) else "0")
+                conn.commit()
+                return self._json({"ok": True})
+            if path == "/api/cantiere" and method == "POST":
+                titolo = (body.get("titolo") or "").strip()
+                if not titolo:
+                    raise actions.BadInput("serve un titolo")
+                return self._json(cantiere.avvia(
+                    conn, titolo, body.get("dettaglio", ""), body.get("progetto"),
+                    body.get("istruzioni", ""), body.get("agente", "claude"),
+                    body.get("modo", "proposta"), body.get("cwd"),
+                    body.get("task_id"), recap.lang_or_default(body.get("lang"))))
+            m = re.match(r"^/api/runs/(\d+)/annulla$", path)
+            if m and method == "POST":
+                return self._json({"annullato": cantiere.annulla(conn, int(m.group(1)))})
             if path == "/api/jarvis/scalda" and method == "POST":
                 agente.scalda(recap.lang_or_default(body.get("lang")))
                 return self._json({"scaldato": True})

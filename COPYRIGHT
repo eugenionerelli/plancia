@@ -1,0 +1,25 @@
+Plancia — one board for the work you do with AI
+Copyright (C) 2026 Eugenio Nerelli
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program. If not, see <https://www.gnu.org/licenses/>.
+
+---
+
+Versions up to and including 0.2.0 were released under the MIT licence and
+remain available under those terms. From 0.3.0 on the project is GPL-3.0-or-later.
+Both licences are the work of the same single copyright holder.
+
+Paying for a prebuilt binary is not a licence fee. The GPL lets anyone charge
+for distributing a program; what the price covers is the Apple Developer ID
+certificate, the notarisation, and continued maintenance. Building the same
+program from source is free and always will be.

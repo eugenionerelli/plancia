@@ -1,11 +1,12 @@
 # Plancia
 
-La plancia di comando del lavoro che fai con l'IA. Legge quello che è già
-successo dentro Claude Code, lo tiene in un posto solo e lo restituisce in due
-modi: un'app macOS nativa per te, un server MCP e un briefing automatico per
-Claude.
+Una lavagna sola per il lavoro che fai con l'IA. Claude Code e Codex si scrivono
+già tutto, in file sul tuo disco. Solo che non li legge nessuno insieme. Plancia
+sì: tutti i task aperti di tutti e due su una lavagna sola, un riepilogo parlato
+della giornata che finisce con la cosa che conviene fare, e un posto solo da cui
+rimandare il lavoro.
 
-E ti racconta com'è andata la giornata, ad alta voce, nella tua lingua.
+Sito: [plancia](https://eugenionerelli.github.io/plancia/).
 
 Tutto in locale. Niente esce dalla macchina. Nessuna dipendenza da installare:
 Python 3 con la sua libreria standard, Swift per l'app.
@@ -23,6 +24,8 @@ Python 3 con la sua libreria standard, Swift per l'app.
 | skill, plugin, routine | `~/.claude/skills`, `plugins`, `scheduled-tasks` | cosa sa fare il tuo Claude Code |
 | GitHub | `gh repo list`, commit recenti | repo, commit, materiale vero per i post |
 | git locale | le tue cartelle di codice | branch, modifiche non committate |
+| sessioni e obiettivi di Codex | `~/.codex/sessions`, `goals_1.sqlite` | gli stessi, più su cosa Codex si è bloccato |
+| liste di task di Claude Code | `~/.claude/tasks/<sessione>/*.json` | cosa è aperto adesso, sessione per sessione |
 | hook di sessione | `SessionStart`, `SessionEnd` | quali sessioni sono aperte adesso |
 
 Le fonti non vengono mai modificate. Plancia le legge e sta da parte.
@@ -54,8 +57,6 @@ settimana?"`, `plancia task add`, `plancia search`, `plancia projects`.
 
 ## Il riepilogo giornaliero
 
-![Il riepilogo](docs/recap.png)
-
 Plancia mette insieme la giornata dai dati veri (sessioni, commit, task aperti e
 chiusi, post, cosa aspetta ogni progetto) e ne fa un testo scritto per essere
 ascoltato: frasi corte, niente elenchi, niente markdown, niente percorsi di file
@@ -83,6 +84,16 @@ plancia daily on 08:45 --voce    # ogni mattina, letto
 Le domande passano da Claude Code con il contesto di Plancia già allegato, quindi
 la risposta sta su quello che è successo davvero e non su un'ipotesi.
 
+### E finisce con una decisione
+
+Il riepilogo non si ferma ai fatti. Plancia cerca i segnali nei dati e li
+trasforma in proposte, ognuna con un'azione già pronta: un lancio fallito da
+riprovare, un obiettivo di Codex senza quota, file non committati da ieri, un
+post approvato e mai uscito, un progetto il cui prossimo passo dichiarato è
+rimasto lì. Le proposte nascono solo dai segnali, mai dall'intuizione di un
+modello, così una giornata tranquilla ti dà un riepilogo corto invece di un
+consiglio inventato. Dici "fallo", o "la seconda", e parte.
+
 ## Jarvis
 
 Non tieni premuto niente. `⌥Spazio` da qualsiasi app, oppure `plancia://jarvis`,
@@ -104,11 +115,50 @@ tieni premuta la barra spaziatrice e detti. È solo dettatura in ingresso, e una
 modalità a mani libere non c'è per scelta. Questa è l'altra metà: risponde e
 agisce.
 
+## La lavagna
+
+![La lavagna](docs/board.png)
+
+Claude Code tiene la sua lista di task in una cartella, Codex i suoi obiettivi in
+un altro database, Plancia ha i suoi. Nessuno dei tre sa degli altri due. La
+lavagna li legge tutti, riporta gli stati a `aperto`, `in corso`, `bloccato`,
+`fatto`, `sparito`, e mostra una lista sola.
+
+Da ogni riga puoi scrivere come vuoi che sia fatto il lavoro e mandarlo:
+
+```bash
+plancia lavagna                          # la lavagna, da terminale
+plancia manda "rilancia l'ablation" --agente codex --progetto atlas
+plancia lanci                            # com'è andata
+```
+
+Il modo predefinito è `proposta`: l'agente legge e riferisce senza toccare un
+file. `--modo esegui` lo lascia scrivere, ed è una scelta che fai ogni volta. Di
+ogni lancio restano esito, token e costo.
+
+## Il registro degli eventi
+
+Gli altri strumenti non devono stare a interrogare un database per sapere che è
+successo qualcosa. Ogni evento che conta finisce in coda a
+`~/.plancia/eventi.jsonl`, una riga JSON, schema `plancia.evento/1`:
+
+```json
+{"schema":"plancia.evento/1","id":"9f2c…","ts":"2026-08-02T09:14:22Z",
+ "tipo":"lavoro.completato","titolo":"Rilancia l'ablation","progetto":"atlas",
+ "origine":"cantiere","dati":{"agente":"codex","modo":"esegui","token":22800}}
+```
+
+Tipi: `lavoro.avviato|completato|fallito`, `task.creato|chiuso`,
+`post.pubblicato`, `progetto.archiviato|aggiornato`, `riepilogo.pronto`. Chi
+legge tiene l'id dell'ultimo evento visto e chiede quello che è venuto dopo, con
+`plancia eventi --dopo <id>` o `GET /api/eventi`. Il file si scrive solo in coda
+e ruota a 5 MB.
+
 ## Due agenti, un archivio solo
 
 Plancia legge le sessioni di Codex da `~/.codex/sessions` insieme a quelle di
 Claude Code, e registra il proprio server MCP dentro `~/.codex/config.toml`. I due
-agenti vedono gli stessi progetti, gli stessi task, gli stessi sedici tool. La
+agenti vedono gli stessi progetti, gli stessi task, gli stessi venti tool. La
 sezione Agenti dell'Archivio mostra chi ha lavorato su cosa e quando si sono
 passati il lavoro.
 
@@ -191,6 +241,11 @@ plancia/briefing.py    quello che vede Claude
 plancia/actions.py     le scritture, condivise fra HTTP e MCP
 plancia/api.py         server locale e REST
 plancia/mcp.py         JSON-RPC su stdio
+plancia/lavagna.py     la lavagna unificata
+plancia/cantiere.py    mandare un lavoro a un agente
+plancia/proposte.py    cosa conviene fare, dai segnali
+plancia/eventi.py      il registro in append
+site/                  il sito, pubblicato su GitHub Pages
 mac/Sources/main.swift l'app macOS
 web/                   dashboard, nessun framework, nessun build
 ```
@@ -199,10 +254,12 @@ Dati in `~/.plancia/`: `plancia.db` (SQLite), `seed.json`, `token`,
 `briefing.md`, `audio/`. Tienili fuori da qualsiasi cartella sincronizzata: un
 file SQLite dentro Drive o Dropbox si corrompe.
 
-## Quattro superfici
+## Cinque superfici
 
-Oggi (il riepilogo, il ritmo, i task), Progetti, Social, Archivio (sessioni,
-agenti, memoria, capacità). Tutto il resto passa da ⌘K.
+Oggi (il riepilogo, il ritmo, le proposte, i task), Lavagna, Progetti, Social,
+Archivio (sessioni, agenti, memoria, capacità). Tutto il resto passa da ⌘K. Al
+primo avvio una guida in cinque passi spiega le parti non ovvie, e resta lì sotto
+"Guida".
 
 ## Cosa serve
 
@@ -218,4 +275,11 @@ letture sono libere: sono dati tuoi, già sul tuo disco.
 
 ## Licenza
 
-MIT. Vedi [LICENSE](LICENSE).
+GPL-3.0-or-later. Vedi [LICENSE](LICENSE) e [COPYRIGHT](COPYRIGHT). Le versioni
+fino alla 0.2.0 erano MIT e restano MIT.
+
+Compilarlo dal sorgente è gratis e lo resterà. Una build firmata e notarizzata,
+che si apre con un doppio clic, si paga quanto vuoi da 5 euro sul
+[sito](https://eugenionerelli.github.io/plancia/#prezzo). È lo stesso programma:
+quello che paghi è il certificato Apple, la notarizzazione e la manutenzione.
+Come si taglia una release sta in [docs/RILASCIO.md](docs/RILASCIO.md).

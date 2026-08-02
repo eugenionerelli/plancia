@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from . import config
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -83,6 +83,10 @@ CREATE TABLE IF NOT EXISTS tasks (
   tags TEXT DEFAULT '',
   source TEXT DEFAULT 'manuale',
   session_id TEXT,
+  agent TEXT DEFAULT '',
+  prompt TEXT DEFAULT '',
+  cwd TEXT DEFAULT '',
+  run_id INTEGER,
   created_at TEXT,
   updated_at TEXT,
   done_at TEXT
@@ -152,6 +156,44 @@ CREATE TABLE IF NOT EXISTS capabilities (
   updated_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS agenda (
+  id INTEGER PRIMARY KEY,
+  fonte TEXT NOT NULL,
+  chiave TEXT NOT NULL,
+  titolo TEXT NOT NULL,
+  dettaglio TEXT DEFAULT '',
+  stato TEXT NOT NULL,
+  stato_origine TEXT DEFAULT '',
+  agente TEXT DEFAULT '',
+  sessione TEXT DEFAULT '',
+  project_id INTEGER REFERENCES projects(id) ON DELETE SET NULL,
+  task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
+  creato_at TEXT,
+  aggiornato_at TEXT,
+  visto_at TEXT,
+  UNIQUE(fonte, chiave)
+);
+CREATE INDEX IF NOT EXISTS idx_agenda_stato ON agenda(stato);
+
+CREATE TABLE IF NOT EXISTS runs (
+  id INTEGER PRIMARY KEY,
+  task_id INTEGER REFERENCES tasks(id) ON DELETE SET NULL,
+  agente TEXT NOT NULL,
+  modo TEXT DEFAULT 'proposta',
+  prompt TEXT NOT NULL,
+  cwd TEXT,
+  stato TEXT DEFAULT 'in coda',
+  inizio TEXT,
+  fine TEXT,
+  pid INTEGER,
+  sessione TEXT,
+  esito TEXT DEFAULT '',
+  log TEXT,
+  token INTEGER DEFAULT 0,
+  costo REAL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_runs_stato ON runs(stato);
+
 CREATE TABLE IF NOT EXISTS events (
   id INTEGER PRIMARY KEY,
   ts TEXT NOT NULL,
@@ -201,13 +243,21 @@ def has_fts(conn: sqlite3.Connection) -> bool:
     return row is not None
 
 
+AGGIUNTE = {
+    "sessions": (("agent", "TEXT DEFAULT 'claude'"), ("scambi", "INTEGER DEFAULT 0")),
+    # un task non è solo una nota: può dire a chi tocca, come farlo e dove
+    "tasks": (("agent", "TEXT DEFAULT ''"), ("prompt", "TEXT DEFAULT ''"),
+              ("cwd", "TEXT DEFAULT ''"), ("run_id", "INTEGER")),
+}
+
+
 def migrate(conn: sqlite3.Connection) -> None:
     """Colonne aggiunte dopo: SQLite non ha ALTER condizionale."""
-    presenti = {r["name"] for r in conn.execute("PRAGMA table_info(sessions)")}
-    for colonna, definizione in (("agent", "TEXT DEFAULT 'claude'"),
-                                 ("scambi", "INTEGER DEFAULT 0")):
-        if colonna not in presenti:
-            conn.execute(f"ALTER TABLE sessions ADD COLUMN {colonna} {definizione}")
+    for tabella, colonne in AGGIUNTE.items():
+        presenti = {r["name"] for r in conn.execute(f"PRAGMA table_info({tabella})")}
+        for colonna, definizione in colonne:
+            if colonna not in presenti:
+                conn.execute(f"ALTER TABLE {tabella} ADD COLUMN {colonna} {definizione}")
 
 
 def init_db(conn: sqlite3.Connection) -> None:

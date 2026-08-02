@@ -10,7 +10,7 @@ import json
 import sys
 import traceback
 
-from . import actions, briefing, config, recap, store, voice
+from . import actions, briefing, cantiere, config, eventi, lavagna, recap, store, voice
 
 PROTOCOL = "2025-06-18"
 SUPPORTED = {"2024-11-05", "2025-03-26", "2025-06-18"}
@@ -138,6 +138,41 @@ TOOLS = [
             "asks to hear something. Keep it short and written to be listened to: no "
             "lists, no markdown, no file paths."),
         "inputSchema": _s("", text=STR, lang=STR),
+    },
+    {
+        "name": "plancia_lavagna",
+        "description": (
+            "The unified board: every open task across Claude Code, Codex and Plancia "
+            "itself, with its source, state and project. Use it to answer 'what is "
+            "open' without guessing, and before proposing new work."),
+        "inputSchema": _s("", stato=STR, fonte=STR, limite=INT),
+    },
+    {
+        "name": "plancia_manda",
+        "description": (
+            "Dispatch a piece of work to an agent. modo='proposta' (default) lets it "
+            "read and plan but never write; modo='esegui' lets it modify files in the "
+            "project folder. Only use 'esegui' when the user asked for the work to be "
+            "actually done. Returns immediately with a run id; check it with "
+            "plancia_lanci."),
+        "inputSchema": _s("", titolo=STR, dettaglio=STR, progetto=STR, istruzioni=STR,
+                          agente={**STR, "description": "claude or codex"},
+                          modo={**STR, "description": "proposta or esegui"},
+                          task_id=INT),
+    },
+    {
+        "name": "plancia_lanci",
+        "description": "The runs dispatched to agents, newest first, with state and outcome.",
+        "inputSchema": _s("", id=INT, limite=INT),
+    },
+    {
+        "name": "plancia_eventi",
+        "description": (
+            "The append-only event log other tools can consume: work started and "
+            "finished, tasks closed, posts published. Pass 'dopo' with the id of the "
+            "last event you saw to get only what is new. Use it to find what shipped "
+            "since last time, for example before writing a post."),
+        "inputSchema": _s("", dopo=STR, tipo=STR, limite=INT),
     },
     {
         "name": "plancia_sync",
@@ -271,6 +306,30 @@ def call_tool(name: str, args: dict) -> str:
                 raise actions.BadInput("serve un testo")
             info = voice.parla(testo, recap.lang_or_default(args.get("lang")), attendi=False)
             return _fmt({"letto": True, "motore": info["motore"], "lingua": info["lingua"]})
+
+        if name == "plancia_lavagna":
+            return _fmt({"voci": lavagna.elenco(conn, args.get("stato", "aperti"),
+                                                args.get("fonte"),
+                                                int(args.get("limite") or 60)),
+                         "conteggi": lavagna.conteggi(conn)})
+
+        if name == "plancia_manda":
+            titolo = (args.get("titolo") or "").strip()
+            if not titolo:
+                raise actions.BadInput("serve un titolo")
+            return _fmt(cantiere.avvia(
+                conn, titolo, args.get("dettaglio", ""), args.get("progetto"),
+                args.get("istruzioni", ""), args.get("agente", "claude"),
+                args.get("modo", "proposta"), None, args.get("task_id")))
+
+        if name == "plancia_lanci":
+            if args.get("id"):
+                return _fmt(cantiere.dettaglio(conn, int(args["id"])))
+            return _fmt(cantiere.elenco(conn, int(args.get("limite") or 10)))
+
+        if name == "plancia_eventi":
+            return _fmt(eventi.leggi(args.get("dopo"), args.get("tipo"),
+                                     int(args.get("limite") or 50)))
 
         if name == "plancia_sync":
             from . import ingest

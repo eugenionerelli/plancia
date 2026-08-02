@@ -120,11 +120,46 @@ MEMORIA = [
 ]
 
 
+# La lavagna: quello che i tre agenti hanno aperto in questo momento.
+# (fonte, chiave, titolo, stato, stato d'origine, progetto, giorni fa)
+AGENDA = [
+    ("claude", "s-a1/0", "Make the index build incrementally", "in corso", "in_progress",
+     "lumen", 0),
+    ("claude", "s-a1/1", "Anchor links collide on repeated headings", "aperto", "pending",
+     "lumen", 0),
+    ("claude", "s-b2/0", "Hard stop when a project passes its ceiling", "aperto", "pending",
+     "apiary", 1),
+    ("claude", "s-c3/0", "Write up why the second baseline collapsed", "aperto", "pending",
+     "field-notes", 1),
+    ("codex", "g-71", "Port the rollback path to the new release layout", "in corso", "active",
+     "harbour", 2),
+    ("codex", "g-72", "Score the third model on the cleaned split", "bloccato", "usage_limited",
+     "atlas", 2),
+    ("codex", "g-70", "Streaming responses through the proxy", "fatto", "complete", "apiary", 4),
+]
+
+# I lanci: due andati bene, uno male. Quello fallito diventa una proposta.
+# (agente, modo, prompt, progetto, stato, esito, token, costo, ore fa)
+LANCI = [
+    ("claude", "proposta", "Harbour: rollback still leaves the old release dir", "harbour",
+     "riuscito", "The old dir is left because the switch happens before the cleanup step. "
+     "I would move the unlink after the health check passes, and add a test that asserts "
+     "the release dir count stays at two.", 14200, 0.21, 3),
+    ("codex", "esegui", "Drop duplicate tickets before scoring", "atlas", "riuscito",
+     "Deduplicated on (subject, first 200 chars of body). 2143 tickets became 1987. "
+     "Scores moved by less than a point, so the duplicates were not the problem.",
+     22800, 0.34, 20),
+    ("claude", "proposta", "Rerun the ablation with the larger split", "field-notes", "fallito",
+     "the model process exited before returning a result", 800, 0.02, 6),
+]
+
+
 def main():
     conn = store.connect()
     store.init_db(conn)
+    store.migrate(conn)
     for tabella in ("events", "sessions", "commits", "tasks", "posts", "knowledge",
-                    "repos", "project_links", "projects", "capabilities"):
+                    "repos", "project_links", "projects", "capabilities", "agenda", "runs"):
         conn.execute(f"DELETE FROM {tabella}")
 
     ids = {}
@@ -210,9 +245,50 @@ def main():
                      "VALUES(?,?,?,?,'{}',?)",
                      (nome, kind, descrizione, f"/demo/{nome}", quando(3)))
 
+    for fonte, chiave, titolo, stato, origine, key, giorni in AGENDA:
+        ts = quando(giorni, 10)
+        conn.execute(
+            "INSERT INTO agenda(fonte, chiave, titolo, dettaglio, stato, stato_origine, "
+            "agente, sessione, project_id, creato_at, aggiornato_at, visto_at) "
+            "VALUES(?,?,?,'',?,?,?,'',?,?,?,?)",
+            (fonte, chiave, titolo, stato, origine, fonte, ids[key], ts, ts, store.now()))
+
+    # i task di Plancia stanno sulla lavagna come gli altri: la lavagna esiste
+    # proprio per non dover guardare in tre posti diversi
+    for r in conn.execute("SELECT id, title, status, project_id, updated_at FROM tasks"):
+        if r["status"] == "fatto":
+            continue
+        conn.execute(
+            "INSERT INTO agenda(fonte, chiave, titolo, dettaglio, stato, stato_origine, "
+            "agente, sessione, project_id, task_id, creato_at, aggiornato_at, visto_at) "
+            "VALUES('plancia',?,?,'',?,?,'plancia','',?,?,?,?,?)",
+            (f"t{r['id']}", r["title"], r["status"], r["status"], r["project_id"], r["id"],
+             r["updated_at"], r["updated_at"], store.now()))
+
+    for i, (agente, modo, prompt, key, stato, esito, token, costo, ore) in enumerate(LANCI):
+        inizio = (ORA - timedelta(hours=ore)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        fine = (ORA - timedelta(hours=ore, minutes=-4)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        conn.execute(
+            "INSERT INTO runs(agente, modo, prompt, cwd, stato, inizio, fine, sessione, "
+            "esito, log, token, costo) VALUES(?,?,?,?,?,?,?,'',?,'',?,?)",
+            (agente, modo, prompt, f"~/dev/{key}", stato, inizio, fine, esito, token, costo))
+        store.add_event(conn, fine, "lancio", prompt,
+                        f"{agente} · {stato}", ids[key], f"r{i}", agente, dedup=f"r{i}")
+
+    # un repo con roba non committata: e' il segnale che fa nascere una proposta
+    conn.execute("UPDATE repos SET dirty=7, branch='main', local_path='~/dev/lumen' "
+                 "WHERE name='lumen'")
+
+    store.set_meta(conn, "demo", "1")
+    store.set_meta(conn, "onboarding_fatto", "1")
     store.set_meta(conn, "last_sync_end", store.now())
     store.rebuild_search(conn)
     conn.commit()
+
+    # Il riepilogo lo scrive il motore a modello sui dati finti, così quello che
+    # si vede negli screenshot è davvero quello che l'app produce.
+    from plancia import recap  # noqa: E402
+    recap.build(conn, lang="en", engine="template", cache=True)
     conn.close()
     print(f"archivio dimostrativo pronto in {store.config.DB_PATH}")
 
