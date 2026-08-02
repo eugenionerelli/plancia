@@ -9,8 +9,11 @@ with what is worth doing next, and one place to send the work back.
 
 Website: [plancia](https://eugenionerelli.github.io/plancia/).
 
-Local-first. Nothing leaves the machine. No dependencies to install: Python 3 and
-its standard library, Swift for the app.
+Local-first: no telemetry, no account, no server of ours. The only thing that
+goes out is the work you explicitly hand to an agent, and it goes through the
+`claude` or `codex` command already on your machine, under your own
+subscription. No dependencies to install: Python 3 and its standard library,
+Swift for the app.
 
 [Italiano](README.it.md)
 

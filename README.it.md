@@ -10,8 +10,10 @@ rimandare il lavoro.
 
 Sito: [plancia](https://eugenionerelli.github.io/plancia/).
 
-Tutto in locale. Niente esce dalla macchina. Nessuna dipendenza da installare:
-Python 3 con la sua libreria standard, Swift per l'app.
+Tutto in locale: nessuna telemetria, nessun account, nessun nostro server.
+L'unica cosa che esce è il lavoro che affidi tu a un agente, e passa dal comando
+`claude` o `codex` che hai già, con il tuo abbonamento. Nessuna dipendenza da
+installare: Python 3 con la sua libreria standard, Swift per l'app.
 
 [English](README.md)
 
