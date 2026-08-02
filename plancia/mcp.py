@@ -1,0 +1,375 @@
+"""Server MCP di Plancia: il canale con cui Claude Code legge e scrive nell'hub.
+
+JSON-RPC 2.0 su stdio, scritto a mano sulla libreria standard. Nessun pacchetto
+da installare significa che non si rompe quando cambia una dipendenza.
+
+Regola inviolabile: su stdout esce solo JSON-RPC. Ogni diagnostica va su stderr.
+"""
+
+import json
+import sys
+import traceback
+
+from . import actions, briefing, config, recap, store, voice
+
+PROTOCOL = "2025-06-18"
+SUPPORTED = {"2024-11-05", "2025-03-26", "2025-06-18"}
+VERSION = "1.0.0"
+
+
+def err(msg: str) -> None:
+    print(f"[plancia-mcp] {msg}", file=sys.stderr, flush=True)
+
+
+# --------------------------------------------------------------------------
+# definizione dei tool
+# --------------------------------------------------------------------------
+
+def _s(desc, **props):
+    return {"type": "object", "properties": props, "additionalProperties": False,
+            "description": desc}
+
+
+STR = {"type": "string"}
+INT = {"type": "integer"}
+
+TOOLS = [
+    {
+        "name": "plancia_briefing",
+        "description": (
+            "Read first in any session about the user's own work. Returns the current "
+            "state of his AI work: active projects, open tasks, queued social posts, "
+            "recent activity. Optionally scoped to one project."),
+        "inputSchema": _s("", project={**STR, "description": "project key or name (optional)"}),
+    },
+    {
+        "name": "plancia_search",
+        "description": (
+            "Full-text search across everything Plancia knows: past Claude Code sessions, "
+            "memory notes, tasks, social posts, commits. Use it before asking the user "
+            "'did we already do X?'."),
+        "inputSchema": _s("", query=STR, limit=INT),
+    },
+    {
+        "name": "plancia_projects",
+        "description": "List the projects with status, priority, last activity and open task counts.",
+        "inputSchema": _s("", status=STR, include_hidden={"type": "boolean"}),
+    },
+    {
+        "name": "plancia_project_update",
+        "description": (
+            "Update a project: status (attivo/in pausa/concluso/idea), next_action, "
+            "summary, priority (1 high, 3 low), pinned. Set next_action whenever you "
+            "finish a chunk of work so the next session knows where to pick up."),
+        "inputSchema": _s("", project=STR, status=STR, next_action=STR, summary=STR,
+                          priority=INT, pinned=INT),
+    },
+    {
+        "name": "plancia_tasks",
+        "description": "List tasks. status: aperti (default), tutti, or one of aperto/in corso/bloccato/fatto/archiviato.",
+        "inputSchema": _s("", status=STR, project=STR, limit=INT),
+    },
+    {
+        "name": "plancia_task_add",
+        "description": (
+            "Record a task. Use it whenever work is identified but not done in this "
+            "session, so it survives the end of the conversation."),
+        "inputSchema": _s("", title=STR, project=STR, priority=INT, due=STR, body=STR),
+    },
+    {
+        "name": "plancia_task_update",
+        "description": "Change a task: status, priority, title, body, due date, project.",
+        "inputSchema": _s("", id=INT, status=STR, priority=INT, title=STR, body=STR,
+                          due=STR, project=STR),
+    },
+    {
+        "name": "plancia_posts",
+        "description": "List social posts and their state in the pipeline (idea, bozza, approvato, programmato, pubblicato).",
+        "inputSchema": _s("", status=STR, platform=STR),
+    },
+    {
+        "name": "plancia_post_add",
+        "description": (
+            "Save a social post draft. source_ref must point at the real work behind it "
+            "(a commit sha, a repo name, a session id): the account only posts about "
+            "things that actually happened. Saving a draft is not publishing."),
+        "inputSchema": _s("", text=STR, platform=STR, status=STR, project=STR,
+                          source_ref=STR, url=STR, scheduled_for=STR),
+    },
+    {
+        "name": "plancia_post_update",
+        "description": (
+            "Update a post: status, url once published, metrics, text. Mark 'pubblicato' "
+            "only after it is actually live, and pass the url."),
+        "inputSchema": _s("", id=INT, status=STR, url=STR, text=STR, metrics=STR,
+                          scheduled_for=STR),
+    },
+    {
+        "name": "plancia_sessions",
+        "description": "Past Claude Code sessions with project, date, size and the opening prompt. Use to find where something was done.",
+        "inputSchema": _s("", project=STR, query=STR, limit=INT),
+    },
+    {
+        "name": "plancia_memory",
+        "description": "Read the memory notes Plancia indexed (Claude's own memory files). Pass name for the full text, or query to search.",
+        "inputSchema": _s("", name=STR, query=STR),
+    },
+    {
+        "name": "plancia_log",
+        "description": (
+            "Record something that happened, so it shows up in the timeline: a decision, "
+            "a milestone, a deploy, a dead end. kind: nota, decisione, milestone, problema."),
+        "inputSchema": _s("", title=STR, kind=STR, detail=STR, project=STR, ref=STR),
+    },
+    {
+        "name": "plancia_recap",
+        "description": (
+            "The spoken daily recap of his work: sessions, commits, tasks closed and "
+            "open, posts, what to pick up next. Use it when he asks how the day went, "
+            "what he got done, or for a briefing. Pass speak=true to read it aloud on "
+            "his Mac. lang: it, en, es, fr, de, pt."),
+        "inputSchema": _s("", lang=STR, day={**STR, "description": "YYYY-MM-DD, default today"},
+                          speak={"type": "boolean"}),
+    },
+    {
+        "name": "plancia_speak",
+        "description": (
+            "Read a text out loud on his Mac, in the language given. Use only when he "
+            "asks to hear something. Keep it short and written to be listened to: no "
+            "lists, no markdown, no file paths."),
+        "inputSchema": _s("", text=STR, lang=STR),
+    },
+    {
+        "name": "plancia_sync",
+        "description": "Re-scan sessions, memory, repos. Fast when incremental; pass full=true to rebuild from scratch.",
+        "inputSchema": _s("", full={"type": "boolean"}, skip_git={"type": "boolean"}),
+    },
+]
+
+
+# --------------------------------------------------------------------------
+# esecuzione
+# --------------------------------------------------------------------------
+
+def _fmt(data) -> str:
+    if isinstance(data, str):
+        return data
+    return json.dumps(data, ensure_ascii=False, indent=2, default=str)
+
+
+def call_tool(name: str, args: dict) -> str:
+    conn = store.connect()
+    store.init_db(conn)
+    try:
+        if name == "plancia_briefing":
+            return briefing.build(conn, args.get("project"))
+
+        if name == "plancia_search":
+            hits = store.search(conn, args.get("query", ""), int(args.get("limit") or 25))
+            return _fmt(hits) if hits else "nessun risultato"
+
+        if name == "plancia_projects":
+            sql = ("SELECT p.id, p.key, p.name, p.kind, p.status, p.priority, p.pinned, "
+                   "p.summary, p.next_action, p.last_activity, "
+                   "(SELECT COUNT(*) FROM tasks t WHERE t.project_id=p.id AND "
+                   "t.status IN ('aperto','in corso','bloccato')) AS task_aperti, "
+                   "(SELECT COUNT(*) FROM sessions s WHERE s.project_id=p.id) AS sessioni "
+                   "FROM projects p WHERE 1=1")
+            params = []
+            if not args.get("include_hidden"):
+                sql += " AND p.hidden=0"
+            if args.get("status"):
+                sql += " AND p.status=?"
+                params.append(args["status"])
+            sql += " ORDER BY p.pinned DESC, p.priority ASC, p.last_activity DESC"
+            return _fmt([dict(r) for r in conn.execute(sql, params).fetchall()])
+
+        if name == "plancia_project_update":
+            return _fmt(actions.project_update(
+                conn, args.get("project"),
+                status=args.get("status"), next_action=args.get("next_action"),
+                summary=args.get("summary"), priority=args.get("priority"),
+                pinned=args.get("pinned")))
+
+        if name == "plancia_tasks":
+            return _fmt(actions.tasks_list(conn, args.get("status"), args.get("project"),
+                                           int(args.get("limit") or 50)))
+
+        if name == "plancia_task_add":
+            return _fmt(actions.task_add(
+                conn, args.get("title"), args.get("body", ""), args.get("project"),
+                args.get("priority", 2), args.get("due"), source="claude"))
+
+        if name == "plancia_task_update":
+            return _fmt(actions.task_update(
+                conn, int(args.get("id")), status=args.get("status"),
+                priority=args.get("priority"), title=args.get("title"),
+                body=args.get("body"), due=args.get("due"), project=args.get("project")))
+
+        if name == "plancia_posts":
+            return _fmt(actions.posts_list(conn, args.get("status"), args.get("platform")))
+
+        if name == "plancia_post_add":
+            return _fmt(actions.post_add(
+                conn, args.get("text"), args.get("platform", "x"),
+                args.get("status", "bozza"), args.get("project"), args.get("url"),
+                args.get("source_ref", ""), args.get("scheduled_for")))
+
+        if name == "plancia_post_update":
+            return _fmt(actions.post_update(
+                conn, int(args.get("id")), status=args.get("status"), url=args.get("url"),
+                text=args.get("text"), metrics=args.get("metrics"),
+                scheduled_for=args.get("scheduled_for")))
+
+        if name == "plancia_sessions":
+            sql = ("SELECT s.session_id, s.title, substr(s.first_prompt,1,220) AS prompt, "
+                   "s.started_at, s.ended_at, s.n_user, s.n_tools, s.cwd, s.models, "
+                   "p.name AS progetto FROM sessions s LEFT JOIN projects p ON p.id=s.project_id "
+                   "WHERE 1=1")
+            params = []
+            if args.get("project"):
+                row = store.get_project(conn, args["project"])
+                sql += " AND s.project_id=?"
+                params.append(row["id"] if row else -1)
+            if args.get("query"):
+                sql += " AND (s.first_prompt LIKE ? OR s.title LIKE ?)"
+                params += [f"%{args['query']}%"] * 2
+            sql += " ORDER BY s.started_at DESC LIMIT ?"
+            params.append(int(args.get("limit") or 20))
+            return _fmt([dict(r) for r in conn.execute(sql, params).fetchall()])
+
+        if name == "plancia_memory":
+            if args.get("name"):
+                row = conn.execute(
+                    "SELECT name, description, type, body, updated_at FROM knowledge "
+                    "WHERE name=? OR name LIKE ?", (args["name"], f"%{args['name']}%")
+                ).fetchone()
+                return _fmt(dict(row)) if row else "nessuna memoria con questo nome"
+            like = f"%{args.get('query', '')}%"
+            rows = conn.execute(
+                "SELECT name, description, type, updated_at FROM knowledge "
+                "WHERE name LIKE ? OR description LIKE ? OR body LIKE ? "
+                "ORDER BY updated_at DESC LIMIT 40", (like, like, like)).fetchall()
+            return _fmt([dict(r) for r in rows])
+
+        if name == "plancia_log":
+            return _fmt(actions.log_event(
+                conn, args.get("title"), args.get("kind", "nota"), args.get("detail", ""),
+                args.get("project"), args.get("ref")))
+
+        if name == "plancia_recap":
+            data = recap.build(conn, args.get("day"), args.get("lang"))
+            if args.get("speak"):
+                info = voice.parla(data["testo"], data["lingua"], attendi=False)
+                data["voce"] = info["motore"]
+            data.pop("dati", None)
+            return _fmt(data)
+
+        if name == "plancia_speak":
+            testo = (args.get("text") or "").strip()
+            if not testo:
+                raise actions.BadInput("serve un testo")
+            info = voice.parla(testo, recap.lang_or_default(args.get("lang")), attendi=False)
+            return _fmt({"letto": True, "motore": info["motore"], "lingua": info["lingua"]})
+
+        if name == "plancia_sync":
+            from . import ingest
+            conn.close()
+            res = ingest.sync(full=bool(args.get("full")),
+                              skip_git=bool(args.get("skip_git")))
+            return _fmt(res)
+
+        raise actions.BadInput(f"tool sconosciuto: {name}")
+    finally:
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+# --------------------------------------------------------------------------
+# ciclo JSON-RPC
+# --------------------------------------------------------------------------
+
+def respond(rid, result=None, error=None) -> None:
+    msg = {"jsonrpc": "2.0", "id": rid}
+    if error is not None:
+        msg["error"] = error
+    else:
+        msg["result"] = result
+    sys.stdout.write(json.dumps(msg, ensure_ascii=False) + "\n")
+    sys.stdout.flush()
+
+
+def handle(req: dict) -> None:
+    method = req.get("method")
+    rid = req.get("id")
+    params = req.get("params") or {}
+
+    if rid is None:  # notifica: nessuna risposta
+        return
+
+    if method == "initialize":
+        asked = params.get("protocolVersion")
+        respond(rid, {
+            "protocolVersion": asked if asked in SUPPORTED else PROTOCOL,
+            "capabilities": {"tools": {"listChanged": False}},
+            "serverInfo": {"name": "plancia", "version": VERSION},
+            "instructions": (
+                "Plancia is the user's control centre for their AI work. Call "
+                "plancia_briefing at the start of a session about his projects, and "
+                "record tasks, decisions and social posts as they happen."),
+        })
+    elif method == "ping":
+        respond(rid, {})
+    elif method == "tools/list":
+        respond(rid, {"tools": TOOLS})
+    elif method == "resources/list":
+        respond(rid, {"resources": []})
+    elif method == "resources/templates/list":
+        respond(rid, {"resourceTemplates": []})
+    elif method == "prompts/list":
+        respond(rid, {"prompts": []})
+    elif method == "tools/call":
+        name = params.get("name", "")
+        args = params.get("arguments") or {}
+        try:
+            text = call_tool(name, args)
+            respond(rid, {"content": [{"type": "text", "text": text}], "isError": False})
+        except actions.BadInput as exc:
+            respond(rid, {"content": [{"type": "text", "text": f"Errore: {exc}"}],
+                          "isError": True})
+        except Exception as exc:
+            err(traceback.format_exc())
+            respond(rid, {"content": [{"type": "text", "text": f"Errore interno: {exc}"}],
+                          "isError": True})
+    else:
+        respond(rid, error={"code": -32601, "message": f"metodo non gestito: {method}"})
+
+
+def main() -> int:
+    config.ensure_dirs()
+    conn = store.connect()
+    store.init_db(conn)
+    conn.close()
+    for line in sys.stdin:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            req = json.loads(line)
+        except Exception:
+            continue
+        try:
+            if isinstance(req, list):
+                for item in req:
+                    handle(item)
+            else:
+                handle(req)
+        except Exception:
+            err(traceback.format_exc())
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

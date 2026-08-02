@@ -1,0 +1,29 @@
+{
+  "_note": "Example project map. Your own copy lives in ~/.plancia/seed.json and wins over this one. Run `plancia init` to generate it from your repos, folders and Claude memory.",
+  "projects": [
+    {
+      "key": "example-project",
+      "name": "Example project",
+      "kind": "progetto",
+      "priority": 2,
+      "pinned": 0,
+      "keywords": [
+        "example",
+        "demo"
+      ],
+      "links": {
+        "memory": [
+          "a-memory-file-name"
+        ],
+        "repo": [
+          "a-github-repo"
+        ],
+        "path": [
+          "~/dev/example",
+          "DRIVE/Some Folder"
+        ]
+      }
+    }
+  ],
+  "method_memories": []
+}

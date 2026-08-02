@@ -1,0 +1,415 @@
+"""Il riepilogo giornaliero: cosa è successo oggi, detto come lo diresti a voce.
+
+Due strade per il testo. Quella a modelli è deterministica, non costa niente e
+funziona sempre. Quella con Claude prende gli stessi dati e li racconta meglio.
+Se la seconda non risponde entro il tempo previsto, si usa la prima.
+"""
+
+import json
+import os
+import shutil
+import subprocess
+from datetime import datetime, timedelta, timezone
+
+from . import config, store
+
+LANGS = ["it", "en", "es", "fr", "de", "pt"]
+DEFAULT_LANG = "it"
+
+
+def lang_or_default(lang=None) -> str:
+    lang = (lang or config.load_config().get("lingua") or DEFAULT_LANG).lower()[:2]
+    return lang if lang in LANGS else DEFAULT_LANG
+
+
+# --------------------------------------------------------------------------
+# raccolta dati
+# --------------------------------------------------------------------------
+
+def _bounds(day: str = None):
+    """Estremi UTC della giornata locale: il database è in UTC, la giornata no."""
+    local = datetime.now().astimezone()
+    if day:
+        base = datetime.strptime(day, "%Y-%m-%d").replace(tzinfo=local.tzinfo)
+    else:
+        base = local
+    start = base.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=1)
+    fmt = "%Y-%m-%dT%H:%M:%SZ"
+    return (start.astimezone(timezone.utc).strftime(fmt),
+            end.astimezone(timezone.utc).strftime(fmt),
+            start.strftime("%Y-%m-%d"))
+
+
+def collect(conn, day: str = None) -> dict:
+    start, end, label = _bounds(day)
+    prev_start = (datetime.strptime(start, "%Y-%m-%dT%H:%M:%SZ") - timedelta(days=1)
+                  ).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    rows = lambda sql, p=(): [dict(r) for r in conn.execute(sql, p).fetchall()]
+    one = lambda sql, p=(): conn.execute(sql, p).fetchone()[0]
+
+    sessioni = rows(
+        "SELECT s.session_id, s.title, substr(s.first_prompt,1,240) AS prompt, "
+        "s.started_at, s.n_user, s.n_tools, s.out_tokens, p.name AS progetto, p.key AS chiave "
+        "FROM sessions s LEFT JOIN projects p ON p.id=s.project_id "
+        f"WHERE s.started_at >= ? AND s.started_at < ? AND {store.visibile()} "
+        "ORDER BY s.out_tokens DESC",
+        (start, end))
+    commit = rows(
+        "SELECT repo, message, date FROM commits WHERE date >= ? AND date < ? "
+        "ORDER BY date DESC", (start, end))
+    task_chiusi = rows(
+        "SELECT t.id, t.title, p.name AS progetto FROM tasks t "
+        "LEFT JOIN projects p ON p.id=t.project_id "
+        "WHERE t.done_at >= ? AND t.done_at < ?", (start, end))
+    task_creati = rows(
+        "SELECT t.id, t.title, p.name AS progetto FROM tasks t "
+        "LEFT JOIN projects p ON p.id=t.project_id "
+        "WHERE t.created_at >= ? AND t.created_at < ? AND t.status <> 'fatto'", (start, end))
+    task_aperti = rows(
+        "SELECT t.id, t.title, t.priority, t.due, p.name AS progetto FROM tasks t "
+        "LEFT JOIN projects p ON p.id=t.project_id "
+        "WHERE t.status IN ('aperto','in corso','bloccato') "
+        "ORDER BY t.priority ASC, t.due IS NULL, t.due ASC LIMIT 8")
+    scaduti = [t for t in task_aperti if t["due"] and t["due"] < label]
+    post_pubblicati = rows(
+        "SELECT id, platform, substr(text,1,120) AS text, url FROM posts "
+        "WHERE published_at >= ? AND published_at < ?", (start, end))
+    post_coda = rows(
+        "SELECT id, platform, status, substr(text,1,120) AS text FROM posts "
+        "WHERE status IN ('idea','bozza','approvato','programmato') LIMIT 5")
+    prossimi = rows(
+        "SELECT name, key, next_action, last_activity FROM projects "
+        "WHERE status='attivo' AND hidden=0 AND next_action <> '' "
+        "ORDER BY priority ASC, last_activity DESC LIMIT 5")
+    fermi = rows(
+        "SELECT name, key, last_activity FROM projects WHERE status='attivo' AND hidden=0 "
+        "AND last_activity IS NOT NULL AND last_activity < ? "
+        "ORDER BY last_activity ASC LIMIT 3",
+        ((datetime.now(timezone.utc) - timedelta(days=14)).strftime("%Y-%m-%dT%H:%M:%SZ"),))
+
+    per_progetto = {}
+    for s in sessioni:
+        key = s["progetto"] or "senza progetto"
+        voce = per_progetto.setdefault(key, {"progetto": key, "sessioni": 0, "token": 0,
+                                             "titoli": []})
+        voce["sessioni"] += 1
+        voce["token"] += s["out_tokens"] or 0
+        if s["title"]:
+            voce["titoli"].append(s["title"])
+    for c in commit:
+        key = None
+        row = conn.execute("SELECT p.name FROM repos r JOIN projects p ON p.id=r.project_id "
+                           "WHERE r.name=?", (c["repo"],)).fetchone()
+        key = row["name"] if row else c["repo"]
+        voce = per_progetto.setdefault(key, {"progetto": key, "sessioni": 0, "token": 0,
+                                             "titoli": []})
+        voce.setdefault("commit", 0)
+        voce["commit"] = voce.get("commit", 0) + 1
+
+    return {
+        "giorno": label,
+        "sessioni": sessioni,
+        "sessioni_ieri": one(f"SELECT COUNT(*) FROM sessions s WHERE started_at >= ? "
+                             f"AND started_at < ? AND {store.visibile()}", (prev_start, start)),
+        "commit": commit,
+        "per_progetto": sorted(per_progetto.values(),
+                               key=lambda v: (-v["token"], -v["sessioni"])),
+        "task_chiusi": task_chiusi,
+        "task_creati": task_creati,
+        "task_aperti": task_aperti,
+        "task_scaduti": scaduti,
+        "post_pubblicati": post_pubblicati,
+        "post_coda": post_coda,
+        "prossimi_passi": prossimi,
+        "progetti_fermi": fermi,
+        "token_giorno": sum(s["out_tokens"] or 0 for s in sessioni),
+    }
+
+
+# --------------------------------------------------------------------------
+# testo a modelli, senza modello linguistico
+# --------------------------------------------------------------------------
+
+P = {
+    "it": {
+        "apertura_vuota": "Oggi non risulta ancora niente. Nessuna sessione, nessun commit.",
+        "apertura": "{n_sess} e {n_commit} oggi.",
+        "sessione": "una sessione", "sessioni": "{n} sessioni",
+        "commit_1": "un commit", "commit_n": "{n} commit", "commit_0": "nessun commit",
+        "su_progetti": "Hai lavorato su {elenco}.",
+        "piu_lungo": "La più lunga è stata {titolo}.",
+        "confronto_su": "Ieri erano {n}, quindi oggi hai spinto di più.",
+        "confronto_giu": "Ieri erano {n}.",
+        "task_chiusi": "Hai chiuso {n}: {elenco}.",
+        "task_uno": "un task", "task_n": "{n} task",
+        "task_aperti": "Restano aperti {n} task, il primo è {titolo}.",
+        "task_aperti_1": "Resta un task aperto: {titolo}.",
+        "scaduti": "Attenzione, {n} in ritardo.",
+        "post": "Sul fronte social, {n} pubblicati e {q} in coda.",
+        "prossimi": "Per domani: {elenco}.",
+        "fermi": "Fermo da un po': {elenco}.",
+        "chiusura": "Vuoi che approfondisca qualcosa?",
+        "buongiorno": "Buongiorno.", "buonasera": "Buonasera.", "buonpomeriggio": "Buon pomeriggio.",
+        "e": " e ",
+    },
+    "en": {
+        "apertura_vuota": "Nothing logged today yet. No sessions, no commits.",
+        "apertura": "{n_sess} and {n_commit} today.",
+        "sessione": "one session", "sessioni": "{n} sessions",
+        "commit_1": "one commit", "commit_n": "{n} commits", "commit_0": "no commits",
+        "su_progetti": "You worked on {elenco}.",
+        "piu_lungo": "The longest one was {titolo}.",
+        "confronto_su": "Yesterday it was {n}, so today you pushed harder.",
+        "confronto_giu": "Yesterday it was {n}.",
+        "task_chiusi": "You closed {n}: {elenco}.",
+        "task_uno": "one task", "task_n": "{n} tasks",
+        "task_aperti": "{n} tasks are still open, first up is {titolo}.",
+        "task_aperti_1": "One task is still open: {titolo}.",
+        "scaduti": "Careful, {n} are overdue.",
+        "post": "On social, {n} published and {q} in the queue.",
+        "prossimi": "For tomorrow: {elenco}.",
+        "fermi": "Untouched for a while: {elenco}.",
+        "chiusura": "Want me to dig into any of it?",
+        "buongiorno": "Good morning.", "buonasera": "Good evening.", "buonpomeriggio": "Good afternoon.",
+        "e": " and ",
+    },
+    "es": {
+        "apertura_vuota": "Hoy todavía no hay nada. Ninguna sesión, ningún commit.",
+        "apertura": "{n_sess} y {n_commit} hoy.",
+        "sessione": "una sesión", "sessioni": "{n} sesiones",
+        "commit_1": "un commit", "commit_n": "{n} commits", "commit_0": "ningún commit",
+        "su_progetti": "Has trabajado en {elenco}.",
+        "piu_lungo": "La más larga fue {titolo}.",
+        "confronto_su": "Ayer fueron {n}, así que hoy has ido más fuerte.",
+        "confronto_giu": "Ayer fueron {n}.",
+        "task_chiusi": "Has cerrado {n}: {elenco}.",
+        "task_uno": "una tarea", "task_n": "{n} tareas",
+        "task_aperti": "Quedan {n} tareas abiertas, la primera es {titolo}.",
+        "task_aperti_1": "Queda una tarea abierta: {titolo}.",
+        "scaduti": "Ojo, {n} van con retraso.",
+        "post": "En social, {n} publicados y {q} en cola.",
+        "prossimi": "Para mañana: {elenco}.",
+        "fermi": "Parado desde hace tiempo: {elenco}.",
+        "chiusura": "¿Quieres que entre en detalle en algo?",
+        "buongiorno": "Buenos días.", "buonasera": "Buenas noches.", "buonpomeriggio": "Buenas tardes.",
+        "e": " y ",
+    },
+}
+P["fr"] = P["en"]
+P["de"] = P["en"]
+P["pt"] = P["es"]
+
+
+def _elenco(items, lang) -> str:
+    items = [i for i in items if i]
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    return ", ".join(items[:-1]) + P[lang]["e"] + items[-1]
+
+
+def _saluto(lang) -> str:
+    ora = datetime.now().hour
+    key = "buongiorno" if ora < 13 else ("buonpomeriggio" if ora < 19 else "buonasera")
+    return P[lang][key]
+
+
+def render_template(dati: dict, lang: str) -> str:
+    t = P[lang]
+    frasi = [_saluto(lang)]
+    n_sess, n_commit = len(dati["sessioni"]), len(dati["commit"])
+
+    if not n_sess and not n_commit:
+        frasi.append(t["apertura_vuota"])
+    else:
+        sess = t["sessione"] if n_sess == 1 else t["sessioni"].format(n=n_sess)
+        com = (t["commit_0"] if n_commit == 0 else
+               t["commit_1"] if n_commit == 1 else t["commit_n"].format(n=n_commit))
+        frasi.append(t["apertura"].format(n_sess=sess, n_commit=com).capitalize())
+        nomi = [v["progetto"] for v in dati["per_progetto"][:3]]
+        if nomi:
+            frasi.append(t["su_progetti"].format(elenco=_elenco(nomi, lang)))
+        if dati["sessioni"] and dati["sessioni"][0].get("title"):
+            frasi.append(t["piu_lungo"].format(titolo=dati["sessioni"][0]["title"]))
+        ieri = dati["sessioni_ieri"]
+        if ieri:
+            frasi.append((t["confronto_su"] if n_sess > ieri else t["confronto_giu"]).format(n=ieri))
+
+    if dati["task_chiusi"]:
+        n = len(dati["task_chiusi"])
+        quanti = t["task_uno"] if n == 1 else t["task_n"].format(n=n)
+        frasi.append(t["task_chiusi"].format(
+            n=quanti, elenco=_elenco([x["title"] for x in dati["task_chiusi"][:3]], lang)))
+    if dati["task_aperti"]:
+        n = len(dati["task_aperti"])
+        chiave = "task_aperti_1" if n == 1 else "task_aperti"
+        frasi.append(t[chiave].format(n=n, titolo=dati["task_aperti"][0]["title"]))
+    if dati["task_scaduti"]:
+        frasi.append(t["scaduti"].format(n=len(dati["task_scaduti"])))
+    if dati["post_pubblicati"] or dati["post_coda"]:
+        frasi.append(t["post"].format(n=len(dati["post_pubblicati"]), q=len(dati["post_coda"])))
+    if dati["prossimi_passi"]:
+        frasi.append(t["prossimi"].format(elenco=_elenco(
+            [f"{p['name']}, {p['next_action']}" for p in dati["prossimi_passi"][:2]], lang)))
+    if dati["progetti_fermi"]:
+        frasi.append(t["fermi"].format(elenco=_elenco(
+            [p["name"] for p in dati["progetti_fermi"]], lang)))
+    frasi.append(t["chiusura"])
+    return " ".join(f for f in frasi if f)
+
+
+# --------------------------------------------------------------------------
+# testo raccontato da Claude
+# --------------------------------------------------------------------------
+
+NOMI_LINGUA = {"it": "italiano", "en": "English", "es": "español", "fr": "français",
+               "de": "Deutsch", "pt": "português"}
+
+PROMPT = """Sei l'assistente vocale personale di chi legge. Ricevi i dati reali della
+sua giornata di lavoro con l'IA, in JSON.
+
+Scrivi il briefing che gli leggerai ad alta voce, in {lingua}, massimo {parole} parole.
+
+Regole:
+- si ascolta, non si legge: niente elenchi puntati, niente titoli, niente markdown,
+  niente trattini lunghi, niente sigle o percorsi di file letti a voce
+- parla di quello che è successo davvero, non aggiungere niente che non sia nei dati
+- concreto: nomi dei progetti, cosa è cambiato, cosa resta aperto
+- se non è successo quasi niente, dillo in una riga e non riempire
+- chiudi con la cosa più sensata da riprendere adesso, e una domanda breve
+
+Dati:
+{dati}"""
+
+DOMANDA = """Sei l'assistente personale di chi ti parla. Rispondi in {lingua}, a voce,
+massimo {parole} parole. Niente markdown, niente elenchi, niente trattini lunghi.
+Rispondi solo con quello che risulta dai dati; se il dato non c'è, dillo.
+
+Contesto del suo lavoro:
+{contesto}
+
+Domanda: {domanda}"""
+
+
+def claude_bin() -> str:
+    """Il comando `claude`.
+
+    Sotto launchd il PATH non è quello della shell, quindi cercarlo solo con
+    which non basta: senza questo il riepilogo ripiega sempre sul testo a
+    modelli e non si capisce perché.
+    """
+    cfg = config.load_config()
+    candidati = [cfg.get("claude_bin"), shutil.which("claude"),
+                 str(config.HOME / ".local/bin/claude"),
+                 "/usr/local/bin/claude", "/opt/homebrew/bin/claude",
+                 str(config.HOME / ".claude/local/claude")]
+    for c in candidati:
+        if c and os.access(c, os.X_OK):
+            return c
+    return ""
+
+
+def claude_text(prompt: str, timeout: int = 120) -> str:
+    """Una domanda secca a Claude Code in modalità non interattiva."""
+    cfg = config.load_config()
+    exe = claude_bin()
+    if not exe:
+        return ""
+    cmd = [exe, "-p", prompt]
+    model = cfg.get("modello_voce") or "sonnet"
+    if model:
+        cmd[2:2] = ["--model", model]
+    env = dict(os.environ)
+    env.setdefault("CLAUDE_CODE_DISABLE_TERMINAL_TITLE", "1")
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
+                             cwd=str(config.DATA_DIR), env=env)
+    except Exception:
+        return ""
+    if res.returncode != 0:
+        return ""
+    return (res.stdout or "").strip()
+
+
+def _compact(dati: dict) -> dict:
+    """Solo quello che serve a raccontare, niente id e niente rumore."""
+    return {
+        "giorno": dati["giorno"],
+        "sessioni_oggi": len(dati["sessioni"]),
+        "sessioni_ieri": dati["sessioni_ieri"],
+        "token_generati": dati["token_giorno"],
+        "lavoro_per_progetto": [
+            {k: v for k, v in p.items() if k != "titoli"} | {"titoli": p["titoli"][:3]}
+            for p in dati["per_progetto"][:5]],
+        "commit": [{"repo": c["repo"], "messaggio": c["message"]} for c in dati["commit"][:8]],
+        "task_chiusi": [t["title"] for t in dati["task_chiusi"]],
+        "task_creati": [t["title"] for t in dati["task_creati"]],
+        "task_aperti": [{"titolo": t["title"], "progetto": t["progetto"], "scadenza": t["due"]}
+                        for t in dati["task_aperti"][:6]],
+        "task_in_ritardo": [t["title"] for t in dati["task_scaduti"]],
+        "post_pubblicati": [p["text"] for p in dati["post_pubblicati"]],
+        "post_in_coda": len(dati["post_coda"]),
+        "prossimi_passi": [{"progetto": p["name"], "passo": p["next_action"]}
+                           for p in dati["prossimi_passi"]],
+        "progetti_fermi": [p["name"] for p in dati["progetti_fermi"]],
+    }
+
+
+def build(conn=None, day=None, lang=None, engine=None, parole=140) -> dict:
+    close = False
+    if conn is None:
+        conn = store.connect()
+        store.init_db(conn)
+        close = True
+    try:
+        lang = lang_or_default(lang)
+        dati = collect(conn, day)
+        engine = engine or config.load_config().get("motore_riepilogo", "claude")
+        testo, fonte = "", "modello"
+        if engine == "claude":
+            testo = claude_text(PROMPT.format(
+                lingua=NOMI_LINGUA[lang], parole=parole,
+                dati=json.dumps(_compact(dati), ensure_ascii=False, indent=1)))
+            if testo:
+                fonte = "claude"
+        if not testo:
+            testo = render_template(dati, lang)
+        return {"giorno": dati["giorno"], "lingua": lang, "fonte": fonte,
+                "testo": testo, "dati": dati}
+    finally:
+        if close:
+            conn.close()
+
+
+def answer(question: str, lang=None, conn=None, parole=110) -> str:
+    """Una domanda sul proprio lavoro, con il contesto di Plancia già allegato."""
+    from . import briefing
+    close = False
+    if conn is None:
+        conn = store.connect()
+        store.init_db(conn)
+        close = True
+    try:
+        lang = lang_or_default(lang)
+        pezzi = [briefing.build(conn)]
+        hits = store.search(conn, question, 8)
+        if hits:
+            pezzi.append("Risultati di ricerca sul suo archivio:\n" +
+                         json.dumps(hits, ensure_ascii=False)[:2500])
+        dati = collect(conn)
+        pezzi.append("Dati di oggi:\n" +
+                     json.dumps(_compact(dati), ensure_ascii=False)[:2500])
+        risposta = claude_text(DOMANDA.format(
+            lingua=NOMI_LINGUA[lang], parole=parole,
+            contesto="\n\n".join(pezzi), domanda=question), timeout=150)
+        return risposta or {
+            "it": "Non sono riuscito a rispondere adesso.",
+            "en": "I could not get an answer right now.",
+            "es": "No he podido responder ahora.",
+        }.get(lang, "No answer.")
+    finally:
+        if close:
+            conn.close()
