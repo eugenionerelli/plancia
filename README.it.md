@@ -108,6 +108,9 @@ un decimo di secondo, in locale. Tutto il resto va a Claude Code in modalità no
 interattiva con i tool `plancia_*` aperti, quindi il task lo aggiunge davvero, il
 progetto lo aggiorna davvero, l'archivio lo cerca davvero.
 
+In fondo al pannello c'è un campo per scrivere: serve quando il microfono non è
+disponibile e per correggere una frase capita male senza ripeterla.
+
 Il microfono resta aperto anche mentre risponde, quindi lo puoi interrompere
 ricominciando a parlare. È la cancellazione dell'eco sul nodo di ingresso a
 renderlo possibile: senza, si sente da solo e si interrompe da solo. "Annulla"

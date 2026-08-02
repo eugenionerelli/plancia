@@ -101,13 +101,20 @@ Quello che è cambiato sotto:
   che si vanta di non mandare niente fuori non può tenerlo aperto tutto il
   giorno perché ti sei alzato senza dire niente. Tocca l'orbita per riprendere.
 
+- **In fondo al pannello c'è un campo per scrivere.** Serve quando il microfono
+  non c'è, e serve quando una frase viene capita male: la correggi scrivendo
+  invece di ripeterla tutta, che è il momento in cui di solito si molla.
+
 ### La prima volta
 
-macOS chiede microfono e dettatura. Se la finestra non compare, la voce di menu
-"Attiva la voce…" nella barra dei menu la fa comparire davvero: la richiesta
-partita dal pannello vocale spesso non mostra niente, perché quel pannello è
-fatto apposta per non attivare l'app e il sistema mostra quelle finestre solo a
-un'app davanti.
+macOS chiede microfono e dettatura. Se la finestra non compare, usa **"Attiva la
+voce…"** nel menu di Plancia in alto a destra: quella la fa comparire davvero. La
+richiesta partita dal pannello vocale spesso non mostra niente, perché quel
+pannello è fatto apposta per non attivare l'app, e il sistema mostra quelle
+finestre solo a un'app che sta davanti.
+
+Finché non l'hai fatto il pannello resta comunque utile: scrivi nel campo in
+fondo e ti risponde a voce.
 
 Se ricompili spesso, `./tools/certificato.sh` ti fa un certificato di firma
 stabile: senza, l'identità dell'app cambia a ogni compilazione e il consenso
