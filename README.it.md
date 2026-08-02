@@ -30,6 +30,8 @@ Python 3 con la sua libreria standard, Swift per l'app.
 
 Le fonti non vengono mai modificate. Plancia le legge e sta da parte.
 
+Cosa è cambiato di recente e perché: [docs/NOVITA.md](docs/NOVITA.md).
+
 ## Installazione
 
 ```bash

@@ -29,6 +29,8 @@ its standard library, Swift for the app.
 
 Sources are never modified. Plancia reads them and stays out of the way.
 
+See [docs/NOVITA.md](docs/NOVITA.md) for what changed recently and why.
+
 ## Install
 
 ```bash
