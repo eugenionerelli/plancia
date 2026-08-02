@@ -28,7 +28,13 @@ def run():
     except Exception:
         payload = {}
 
-    event = payload.get("hook_event_name") or (sys.argv[1] if len(sys.argv) > 1 else "hook")
+    # `--prova` serve a vedere cosa restituirebbe senza mettere in coda una
+    # sessione che non esiste. Senza, provare l'hook sporca l'archivio con una
+    # sessione fantasma, e le statistiche cominciano a contare cose mai
+    # successe.
+    prova = "--prova" in sys.argv or "--dry-run" in sys.argv
+    argomenti = [a for a in sys.argv[1:] if not a.startswith("-")]
+    event = payload.get("hook_event_name") or (argomenti[0] if argomenti else "hook")
     record = {
         "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "event": event,
@@ -36,12 +42,13 @@ def run():
         "cwd": payload.get("cwd") or "",
         "source": payload.get("source", ""),
     }
-    try:
-        os.makedirs(os.path.dirname(QUEUE), exist_ok=True)
-        with open(QUEUE, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(record, ensure_ascii=False) + "\n")
-    except Exception:
-        pass
+    if not prova:
+        try:
+            os.makedirs(os.path.dirname(QUEUE), exist_ok=True)
+            with open(QUEUE, "a", encoding="utf-8") as fh:
+                fh.write(json.dumps(record, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
 
     if event == "SessionStart":
         try:

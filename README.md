@@ -192,6 +192,10 @@ only the first one pays the startup, and the panel warms it up the moment you
 open it. The daily recap is precomputed at the end of every cold pass: asking for
 it costs 20 ms instead of ten seconds.
 
+`bin/plancia-hook --prova` prints what it would hand to Claude without queueing
+anything: testing the hook must not leave a session in the archive that never
+happened.
+
 ## The data flow
 
 ```

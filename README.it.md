@@ -192,6 +192,10 @@ volta, quindi solo la prima paga l'avvio, e il pannello lo scalda appena lo apri
 Il riepilogo si prepara alla fine di ogni giro freddo: chiederlo costa 20
 millisecondi invece di dieci secondi.
 
+`bin/plancia-hook --prova` stampa quello che passerebbe a Claude senza mettere
+in coda niente: provarlo non deve sporcare l'archivio con una sessione mai
+esistita.
+
 ## Il flusso dei dati
 
 ```

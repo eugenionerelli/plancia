@@ -365,6 +365,22 @@ def main():
 
     shutil.rmtree(casa, ignore_errors=True)
 
+    # ---------------------------------------------------------------- hook
+    coda = casa_hook = Path(tempfile.mkdtemp(prefix="plancia-hook-"))
+    amb = dict(os.environ, PLANCIA_HOME=str(casa_hook))
+    entrata = b'{"hook_event_name":"SessionStart","session_id":"x","cwd":"/tmp"}'
+    r = subprocess.run([str(RADICE / "bin" / "plancia-hook"), "--prova"],
+                       input=entrata, capture_output=True, env=amb)
+    prova("l'hook di prova non mette niente in coda",
+          not (casa_hook / "queue" / "hooks.jsonl").exists()
+          or not (casa_hook / "queue" / "hooks.jsonl").read_text().strip())
+    prova("l'hook esce sempre con zero", r.returncode == 0)
+    subprocess.run([str(RADICE / "bin" / "plancia-hook")], input=entrata,
+                   capture_output=True, env=amb)
+    prova("senza --prova la sessione finisce in coda",
+          (casa_hook / "queue" / "hooks.jsonl").read_text().strip().count("SessionStart") == 1)
+    shutil.rmtree(casa_hook, ignore_errors=True)
+
     # ------------------------------------------------------- skill in archivio
     conn.execute("INSERT INTO capabilities(name, kind, description, path, meta, body, "
                  "updated_at) VALUES('finta','skill','una skill di prova','/finta/SKILL.md',"
