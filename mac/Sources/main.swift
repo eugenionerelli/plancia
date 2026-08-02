@@ -79,7 +79,10 @@ enum API {
             req.setValue("application/json", forHTTPHeaderField: "Content-Type")
             req.httpBody = try? JSONSerialization.data(withJSONObject: body)
         }
-        Log.write("richiesta \(method) \(path)")
+        // Il registro non deve riempirsi di niente: il pannello vocale chiede
+        // gli eventi ogni sei secondi, e sarebbero milleduecento righe l'ora.
+        let silenzioso = path.hasPrefix("/api/eventi")
+        if !silenzioso { Log.write("richiesta \(method) \(path)") }
         URLSession.shared.dataTask(with: req) { data, res, err in
             if let err = err {
                 Log.write("errore \(path): \(err.localizedDescription)")
@@ -87,7 +90,7 @@ enum API {
             }
             let code = (res as? HTTPURLResponse)?.statusCode ?? 0
             let j = data.flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any]
-            Log.write("risposta \(path): \(code)")
+            if !silenzioso { Log.write("risposta \(path): \(code)") }
             DispatchQueue.main.async { done(j, j?["errore"] as? String) }
         }.resume()
     }

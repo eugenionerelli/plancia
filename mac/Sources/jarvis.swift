@@ -419,6 +419,8 @@ final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate, NSText
     /// Quando finisce di parlare torna in ascolto, tranne dopo un errore che ha
     /// già spento tutto.
     private var riprendeDopoAverParlato = true
+    /// L'ho zittito io perché hai ripreso a parlare, non ha finito da solo.
+    private var interrottoDaMe = false
     /// Avvisi arrivati mentre non era il momento di darli.
     private var daDire: [String] = []
     private var timerLavori: Timer?
@@ -561,6 +563,7 @@ final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate, NSText
         sintetizzatore.delegate = self
         Player.shared.onFinish = { [weak self] in
             guard let self = self, self.window?.isVisible == true else { return }
+            if self.interrottoDaMe { self.interrottoDaMe = false; return }
             self.riprendiAscolto()
         }
     }
@@ -568,6 +571,11 @@ final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate, NSText
     /// Hai ripreso la parola mentre parlava lui: si zittisce e ti ascolta.
     private func interrompi() {
         guard stato == .parlo else { return }
+        // Fermare la sintesi fa scattare lo stesso il messaggio di "ho finito
+        // di parlare", che rimetterebbe in ascolto una seconda volta buttando
+        // via la frase appena cominciata. Questa bandierina lo dice a chi
+        // arriva dopo.
+        interrottoDaMe = true
         sintetizzatore.stopSpeaking(at: .immediate)
         Player.shared.stop()
         Log.write("jarvis: interrotto dalla voce")
@@ -792,7 +800,10 @@ final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate, NSText
                     self.risposta.stringValue = frase
                     self.ascolto.pausa()
                     self.parla(frase)
-                } else {
+                } else if self.daDire.count < 3 {
+                    // Più di tre avvisi in coda vuol dire che non stavi
+                    // ascoltando: sentirteli tutti dopo mezz'ora non serve a
+                    // niente, i lanci restano scritti nella lavagna.
                     self.daDire.append(frase)
                 }
             }
@@ -887,6 +898,10 @@ final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate, NSText
 
     func speechSynthesizer(_ s: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         guard window?.isVisible == true else { return }
+        if interrottoDaMe {
+            interrottoDaMe = false
+            return
+        }
         guard riprendeDopoAverParlato else {
             riprendeDopoAverParlato = true
             stato = .spento
