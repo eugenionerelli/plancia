@@ -81,22 +81,46 @@ def _ruota():
         pass
 
 
+# Quanto si legge dal fondo prima di rassegnarsi a leggere tutto. A duecento
+# byte per evento sono più di mille eventi: nessuno che tenga un segnalibro
+# resta indietro di così tanto, e il pannello vocale chiede ogni sei secondi.
+CODA = 256 * 1024
+
+
+def _righe(path, solo_coda=True) -> list:
+    """Le righe di un file, leggendo dal fondo quando basta."""
+    fuori = []
+    try:
+        dimensione = path.stat().st_size
+    except OSError:
+        return fuori
+    try:
+        with open(path, "rb") as fh:
+            if solo_coda and dimensione > CODA:
+                fh.seek(dimensione - CODA)
+                fh.readline()  # la prima riga è tagliata a metà
+            for riga in fh:
+                try:
+                    fuori.append(json.loads(riga.decode("utf-8")))
+                except Exception:
+                    continue
+    except OSError:
+        pass
+    return fuori
+
+
 def leggi(dopo: str = None, tipo: str = None, limite: int = 100) -> list:
     """Gli eventi dopo un certo id, in ordine. Senza `dopo` torna gli ultimi.
 
     `dopo` è l'id dell'ultimo evento già visto: è il segnalibro del consumatore.
     """
-    righe = []
-    for path in (FILE.with_suffix(".1.jsonl"), FILE):
-        try:
-            with open(path, encoding="utf-8") as fh:
-                for riga in fh:
-                    try:
-                        righe.append(json.loads(riga))
-                    except Exception:
-                        continue
-        except OSError:
-            continue
+    righe = _righe(FILE)
+    trovato = any(e.get("id") == dopo for e in righe) if dopo else True
+    if not trovato or (not dopo and len(righe) < limite):
+        # il segnalibro è più indietro della coda: si legge tutto, anche il
+        # file ruotato
+        righe = _righe(FILE.with_suffix(".1.jsonl"), solo_coda=False) + \
+            _righe(FILE, solo_coda=False)
 
     if dopo:
         for i, e in enumerate(righe):

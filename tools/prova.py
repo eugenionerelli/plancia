@@ -234,6 +234,19 @@ def main():
     prova("il segnalibro non torna indietro", eventi.leggi(dopo=e["id"]) == [])
     prova("lo schema è dichiarato", e["schema"] == "plancia.evento/1")
 
+    # con il registro grande si legge dal fondo, non tutto: il pannello vocale
+    # lo chiede ogni sei secondi
+    for i in range(4000):
+        eventi.scrivi("task.creato", f"riempimento {i}")
+    import time as _t
+    _t0 = _t.perf_counter()
+    ultimi = eventi.leggi(limite=5)
+    quanto = (_t.perf_counter() - _t0) * 1000
+    prova("un registro grande si legge in fretta", quanto < 60, f"{quanto:.0f} ms")
+    prova("e torna comunque gli ultimi", len(ultimi) == 5)
+    prova("il segnalibro dell'ultimo non torna niente",
+          eventi.leggi(dopo=ultimi[-1]["id"]) == [])
+
     # ------------------------------------------------------------------- HTTP
     from plancia import api  # noqa: E402
     import threading
