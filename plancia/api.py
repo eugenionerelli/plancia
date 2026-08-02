@@ -70,10 +70,13 @@ def overview(conn, lang=None) -> dict:
         "SELECT p.*, "
         "(SELECT COUNT(*) FROM tasks t WHERE t.project_id=p.id AND t.status IN ('aperto','in corso','bloccato')) AS task_aperti, "
         "(SELECT COUNT(*) FROM sessions s WHERE s.project_id=p.id) AS sessioni, "
+        "(SELECT COALESCE(SUM(s.out_tokens),0) FROM sessions s WHERE s.project_id=p.id "
+        " AND s.started_at > ?) AS token_30g, "
         "(SELECT GROUP_CONCAT(r.name) FROM repos r WHERE r.project_id=p.id) AS repos "
         "FROM projects p WHERE p.hidden=0 "
         "ORDER BY p.pinned DESC, CASE p.status WHEN 'attivo' THEN 0 WHEN 'idea' THEN 1 "
-        "WHEN 'in pausa' THEN 2 ELSE 3 END, p.priority ASC, p.last_activity DESC"
+        "WHEN 'in pausa' THEN 2 ELSE 3 END, p.priority ASC, p.last_activity DESC",
+        (month,)
     ).fetchall()]
 
     events = [dict(r) for r in conn.execute(
@@ -106,6 +109,12 @@ def overview(conn, lang=None) -> dict:
         f"COALESCE(SUM(n_user),0) AS scambi_tuoi, MAX(started_at) AS ultimo "
         f"FROM sessions s WHERE {store.visibile()} GROUP BY agente ORDER BY token DESC"
     ).fetchall()]
+
+    try:
+        from . import proposte as _p
+        stats["fuga"] = _p._fuga(conn)
+    except Exception:
+        stats["fuga"] = None
 
     try:
         from . import lavagna as _lav

@@ -416,6 +416,11 @@ final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate {
     private var timerLavori: Timer?
     private var ultimoEvento = ""
     private var timerAttesa: Timer?
+    /// Dopo un po' che non parli il microfono si chiude da solo. Un'app che si
+    /// vanta di non mandare niente fuori non può tenere il microfono aperto
+    /// tutto il giorno perché ti sei alzato senza dire niente.
+    private var timerInattivita: Timer?
+    private let inattivita: TimeInterval = 180
     /// La voce di sistema la fa l'app: aspettare che il server sintetizzi un
     /// file e lo rimandi indietro costa due secondi buoni a ogni risposta.
     private let sintetizzatore = AVSpeechSynthesizer()
@@ -623,11 +628,14 @@ final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate {
             self.stato = .ascolto
             self.ascolto.accendi(lang: self.lingua)
             self.seguiLavori()
+            self.armaInattivita()
             Log.write("jarvis: in ascolto (\(self.lingua))")
         }
     }
 
     func sospendi() {
+        timerInattivita?.invalidate()
+        timerInattivita = nil
         ascolto.spegni()
         sintetizzatore.stopSpeaking(at: .immediate)
         Player.shared.stop()
@@ -650,10 +658,26 @@ final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate {
         stato = .ascolto
         trascritto.stringValue = ""
         ascolto.riprendi()
+        armaInattivita()
         if let dopo = daDire.first {
             daDire.removeFirst()
             parla(dopo)
         }
+    }
+
+    private func armaInattivita() {
+        timerInattivita?.invalidate()
+        timerInattivita = Timer.scheduledTimer(withTimeInterval: inattivita, repeats: false) {
+            [weak self] _ in
+            guard let self = self, self.stato == .ascolto,
+                  self.trascritto.stringValue.isEmpty else { return }
+            Log.write("jarvis: tre minuti di silenzio, chiudo il microfono")
+            self.sospendi()
+            self.didascalia.stringValue = ["it": "microfono chiuso, tocca per riprendere",
+                                           "en": "microphone closed, tap to resume",
+                                           "es": "micrófono cerrado, toca para seguir"][self.lingua] ?? ""
+        }
+        RunLoop.main.add(timerInattivita!, forMode: .common)
     }
 
     /// Il vocabolario: i nomi dei tuoi progetti, più le parole che contano.

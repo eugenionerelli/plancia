@@ -18,7 +18,8 @@ const EN = {
   'progetti attivi': 'active projects', 'task aperti': 'open tasks', 'task aperto': 'open task',
   'sessioni 7 giorni': 'sessions, 7 days', 'commit 30 giorni': 'commits, 30 days',
   'post in coda': 'posts queued', 'post pubblicati': 'posts published',
-  'token 30 giorni': 'tokens, 30 days', 'memorie': 'memory notes',
+  'token 30 giorni': 'tokens, 30 days', 'oggi': 'today', 'la media': 'the average',
+  'token generati negli ultimi 30 giorni': 'tokens generated in the last 30 days', 'memorie': 'memory notes',
   'Ritmo di lavoro · 30 giorni': 'Work rhythm · 30 days',
   'sessioni': 'sessions', 'commit': 'commits',
   'Task aperti': 'Open tasks', 'Progetti attivi': 'Active projects',
@@ -244,7 +245,8 @@ views.oggi = async () => {
     ${cella(s.task_aperti, T('task aperti'), s.task_scaduti ? 'alarm' : '',
        s.task_scaduti ? `${s.task_scaduti} ${T('in ritardo')}` : '')}
     ${cella(s.progetti_attivi, T('progetti attivi'))}
-    ${cella(kilo(s.token_out_mese), T('token 30 giorni'), 'quiet')}
+    ${cella(kilo(s.token_out_mese), T('token 30 giorni'), s.fuga ? 'warn' : 'quiet',
+       s.fuga ? `${T('oggi')} ${String(s.fuga).replace('.', ',')}× ${T('la media')}` : '')}
   </div>
 
   <div class="bento" data-in="3" style="grid-template-columns:repeat(4,1fr)">
@@ -928,6 +930,7 @@ const projectCard = (p) => `
       <span class="tag">${T(p.kind)}</span>
       ${p.task_aperti ? `<span class="tag warn">${p.task_aperti} ${p.task_aperti === 1 ? T('task aperto') : T('task aperti')}</span>` : ''}
       ${p.sessioni ? `<span class="tag">${p.sessioni} ${T('sessioni')}</span>` : ''}
+      ${p.token_30g ? `<span class="tag mono" title="${T('token generati negli ultimi 30 giorni')}">${kilo(p.token_30g)}</span>` : ''}
       ${p.repos ? `<span class="tag info mono">${esc(String(p.repos).split(',')[0])}</span>` : ''}
       <span style="margin-left:auto">${ago(p.last_activity)}</span>
     </div>
