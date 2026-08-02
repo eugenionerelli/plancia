@@ -47,6 +47,10 @@ def install_hooks() -> str:
         except Exception as exc:
             return f"settings.json illeggibile ({exc}): hook non installati"
         backup(path)
+    # Su una macchina dove Claude Code non ha ancora scritto niente la cartella
+    # non c'è: senza questo, l'installazione moriva con un errore di file non
+    # trovato proprio a chi la faceva per la prima volta.
+    path.parent.mkdir(parents=True, exist_ok=True)
     hooks = data.setdefault("hooks", {})
     for event in HOOK_EVENTS:
         entries = hooks.setdefault(event, [])
@@ -112,7 +116,8 @@ def install_mcp() -> str:
     # ripiego: scrittura diretta in ~/.claude.json
     path = config.CLAUDE_JSON
     if not path.exists():
-        return "impossibile registrare l'MCP: manca ~/.claude.json"
+        return "server MCP non registrato: Claude Code non ha ancora scritto ~/.claude.json. "
+                "Aprilo una volta e poi rilancia `plancia install`"
     backup(path)
     data = json.loads(path.read_text("utf-8"))
     servers = data.setdefault("mcpServers", {})
