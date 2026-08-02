@@ -170,10 +170,23 @@ def motore_scelto() -> str:
     return config.load_config().get("motore_voce", "auto")
 
 
-def sintesi(testo: str, lang: str = "it", motore: str = None, cache=True) -> dict:
+# Oltre questo, aspettare non ha senso: si passa alla voce di sistema.
+# Misurato sul suo Mac: Voicebox mette 42 secondi anche per una frase corta,
+# che vanno bene per il riepilogo della mattina, dove nessuno sta aspettando,
+# e non vanno bene per niente in una conversazione.
+ATTESA_VOICEBOX = 5
+
+
+def sintesi(testo: str, lang: str = "it", motore: str = None, cache=True,
+            subito=False) -> dict:
+    """Il file audio, generato solo se non c'è già.
+
+    `subito` è per quando qualcuno sta aspettando di sentire: si prova la voce
+    clonata per pochi secondi e poi si passa a quella di sistema, invece di
+    lasciare la persona davanti al silenzio.
+    """
     # Ultimo punto prima dell'audio: qui il testo diventa una cosa da dire.
     testo = per_voce(testo, lang)
-    """Restituisce il file audio, generandolo solo se non c'è già."""
     AUDIO_DIR.mkdir(parents=True, exist_ok=True)
     motore = motore or motore_scelto()
     chiave = hashlib.sha1(f"{motore}|{lang}|{testo}".encode("utf-8")).hexdigest()[:16]
@@ -187,7 +200,8 @@ def sintesi(testo: str, lang: str = "it", motore: str = None, cache=True) -> dic
             if motore == "voicebox" and config.load_config().get("voicebox_avvio_automatico"):
                 voicebox_avvia()
             if voicebox_vivo():
-                sintesi_voicebox(testo, lang, out)
+                sintesi_voicebox(testo, lang, out,
+                                 timeout=ATTESA_VOICEBOX if subito else 180)
                 usato = "voicebox"
         except Exception:
             usato = None

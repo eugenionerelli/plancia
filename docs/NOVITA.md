@@ -115,6 +115,20 @@ Quello che è cambiato sotto:
   sulla strada della voce gli indirizzi diventano "su GitHub", dei percorsi resta
   l'ultimo pezzo, e gli sha spariscono. Sullo schermo il testo resta intero.
 
+### La voce clonata ha una scadenza
+
+Misurato sul tuo Mac: Voicebox mette **42 secondi** a sintetizzare anche una
+frase corta. Vanno benissimo per il riepilogo della mattina, dove nessuno sta
+aspettando davanti allo schermo. In una conversazione sono la fine della
+conversazione.
+
+Adesso, quando qualcuno sta aspettando di sentire, la voce clonata ha cinque
+secondi: passati quelli parla la voce di sistema, che è istantanea. Il pannello
+vocale non ci passa nemmeno, perché sintetizza da sé con la voce di sistema.
+
+Vale la pena guardarlo: l'obiettivo di Codex che hai fermo sulla lavagna, "posso
+usare le API di fish.audio s2.1pro", è esattamente questo problema.
+
 ### Le domande che non passano da un modello
 
 Tre nuove famiglie di domande rispondono in meno di un millesimo di secondo,

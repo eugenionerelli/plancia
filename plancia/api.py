@@ -468,7 +468,7 @@ class Handler(BaseHTTPRequestHandler):
                 nativa = body.get("voce_nativa") and esito["motore"] == "say"
                 if not esito.get("muto") and body.get("voce", True) and \
                         esito.get("risposta") and not nativa:
-                    info = voice.sintesi(esito["risposta"], lang)
+                    info = voice.sintesi(esito["risposta"], lang, subito=True)
                     esito["url"] = "/audio/" + Path(info["file"]).name
                     esito["file"] = info["file"]
                     esito["motore"] = info["motore"]
@@ -481,7 +481,7 @@ class Handler(BaseHTTPRequestHandler):
                 risposta = recap.answer(domanda, lang, conn)
                 out = {"domanda": domanda, "risposta": risposta, "lingua": lang}
                 if body.get("voce", True):
-                    info = voice.sintesi(risposta, lang)
+                    info = voice.sintesi(risposta, lang, subito=True)
                     out["url"] = "/audio/" + Path(info["file"]).name
                     out["file"] = info["file"]
                     out["motore"] = info["motore"]
@@ -489,7 +489,7 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/recap" and method == "POST":
                 data = recap.build(conn, body.get("day"), body.get("lang"), body.get("engine"))
                 if body.get("voce", True):
-                    info = voice.sintesi(data["testo"], data["lingua"])
+                    info = voice.sintesi(data["testo"], data["lingua"], subito=True)
                     data["url"] = "/audio/" + Path(info["file"]).name
                     data["file"] = info["file"]
                     data["motore"] = info["motore"]
