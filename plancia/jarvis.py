@@ -353,7 +353,7 @@ def _esegui(testo: str, lang=None, conn=None) -> dict:
                         "azione": {"tipo": "progetto", "chiave": riga["key"]}}
 
         if comando in ("fallo", "eseguilo"):
-            scelta = proposte.scegli(conn, arg or None)
+            scelta = proposte.scegli(conn, arg or None, lang)
             if not scelta:
                 return {"tipo": "proposta", "risposta": d["niente_proposte"]}
             return _esegui_proposta(conn, scelta, d, lang,

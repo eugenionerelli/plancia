@@ -126,6 +126,9 @@ def overview(conn, lang=None) -> dict:
     from . import proposte as _prop
     try:
         prop = _prop.calcola(conn, lang or config.load_config().get("lingua", "it"))
+        # Si salvano quelle che si stanno mostrando: se poi dici "fallo", deve
+        # partire quella che hai davanti agli occhi, non una calcolata prima.
+        _prop.salva(conn, prop)
     except Exception:
         prop = []
 

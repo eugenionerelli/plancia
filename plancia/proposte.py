@@ -215,9 +215,15 @@ def ultime(conn) -> list:
         return []
 
 
-def scegli(conn, quale=None):
+def scegli(conn, quale=None, lang="it"):
     """La proposta a cui si riferisce un "fallo" o un "la seconda"."""
     lista = ultime(conn)
+    if not lista:
+        # Nessuno le ha ancora chieste in questa sessione: si calcolano adesso,
+        # invece di rispondere che non c'è niente da fare quando c'è.
+        lista = calcola(conn, lang)
+        if lista:
+            salva(conn, lista)
     if not lista:
         return None
     if quale is None:

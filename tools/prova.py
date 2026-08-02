@@ -99,6 +99,11 @@ def main():
     prova("«la seconda» sceglie la seconda",
           proposte.scegli(conn, "la seconda") == p[1] if len(p) > 1 else True)
     prova("«fallo» sceglie la prima", proposte.scegli(conn) == p[0])
+    # Se nessuno le ha ancora chieste, "fallo" non deve dire che non c'è niente
+    store.set_meta(conn, "proposte", "")
+    conn.commit()
+    prova("«fallo» funziona anche a memoria vuota",
+          (proposte.scegli(conn, None, "it") or {}).get("testo") == p[0]["testo"])
 
     # --------------------------------------------------------------- riepilogo
     dati = recap.collect(conn)

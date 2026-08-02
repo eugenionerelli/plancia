@@ -725,6 +725,10 @@ const PASSI = [
 ];
 
 views.benvenuto = async () => {
+  // Chi riapre la guida vuole rivederla, non ritrovarsi all'ultimo passo di
+  // mesi fa. Si riparte da capo se si arriva da fuori.
+  if (state.vistaPrima !== 'benvenuto') state.passo = 0;
+  state.vistaPrima = 'benvenuto';
   const i = Math.min(state.passo || 0, PASSI.length - 1);
   const p = PASSI[i];
   const L = UILANG === 'en' ? 'en' : 'it';
@@ -1262,7 +1266,9 @@ document.addEventListener('click', async (ev) => {
         const box = act.closest('.panel').querySelector('.panel-body');
         box.innerHTML = taskRows(await api('/api/tasks?status=tutti&limit=200'));
       } else if (name === 'passo') {
-        state.passo = +act.dataset.n; await route();
+        state.passo = +act.dataset.n;
+        state.vistaPrima = 'benvenuto';
+        await route();
       } else if (name === 'prova-passo') {
         if (act.dataset.url) {
           location.href = act.dataset.url;
