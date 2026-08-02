@@ -79,6 +79,28 @@ def main():
     prova("la lavagna dimostrativa non tocca le fonti vere",
           lavagna.sync(conn) == 0)
 
+    # una fonte che non risponde non deve far sparire le sue voci: si simula
+    # facendo fallire la lettura di Codex e controllando che restino lì
+    prima = conn.execute("SELECT COUNT(*) FROM agenda WHERE fonte='codex'").fetchone()[0]
+    store.set_meta(conn, "demo", "0")
+    conn.commit()
+    vero_codex, vero_claude = lavagna.da_codex, lavagna.da_claude
+
+    def codex_rotto(esito=None):
+        if esito is not None:
+            esito["ok"] = False
+        return []
+
+    lavagna.da_codex = codex_rotto
+    lavagna.da_claude = lambda esito=None: []
+    lavagna.sync(conn)
+    lavagna.da_codex, lavagna.da_claude = vero_codex, vero_claude
+    dopo = conn.execute("SELECT COUNT(*) FROM agenda WHERE fonte='codex'").fetchone()[0]
+    store.set_meta(conn, "demo", "1")
+    conn.commit()
+    prova("una fonte muta non cancella le sue voci", dopo == prima,
+          f"prima {prima}, dopo {dopo}")
+
     # --------------------------------------------------------------- proposte
     for lingua in ("it", "en", "es"):
         p = proposte.calcola(conn, lingua)

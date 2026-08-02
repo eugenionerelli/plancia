@@ -36,10 +36,17 @@ APERTI = ("aperto", "in corso", "bloccato")
 # le tre fonti
 # --------------------------------------------------------------------------
 
-def da_claude() -> list:
-    """Un file per task, una cartella per sessione."""
+def da_claude(esito=None) -> list:
+    """Un file per task, una cartella per sessione.
+
+    `esito` è un dizionario in cui si segna se la lettura è riuscita. Serve a
+    chi cancella: una fonte che non ha risposto non vuol dire che le sue voci
+    non esistono più.
+    """
     fuori = []
     if not TASK_CLAUDE.is_dir():
+        if esito is not None:
+            esito["ok"] = False
         return fuori
     for cartella in sorted(TASK_CLAUDE.iterdir()):
         if not cartella.is_dir():
@@ -68,9 +75,11 @@ def da_claude() -> list:
     return fuori
 
 
-def da_codex() -> list:
+def da_codex(esito=None) -> list:
     """Gli obiettivi di Codex, letti dal suo SQLite senza toccarlo."""
     if not GOALS_CODEX.exists():
+        if esito is not None:
+            esito["ok"] = False
         return []
     try:
         conn = sqlite3.connect(f"file:{GOALS_CODEX}?mode=ro", uri=True, timeout=3)
@@ -80,6 +89,10 @@ def da_codex() -> list:
             "time_used_seconds, created_at_ms, updated_at_ms FROM thread_goals").fetchall()
         conn.close()
     except Exception:
+        # Il database di Codex può essere occupato mentre lui scrive: è un
+        # inciampo, non una lista vuota.
+        if esito is not None:
+            esito["ok"] = False
         return []
     fuori = []
     for r in righe:
@@ -154,7 +167,8 @@ def sync(conn, progress=None) -> int:
         return 0
 
     from . import ingest
-    voci = da_claude() + da_codex() + da_plancia(conn)
+    esiti = {"claude": {"ok": True}, "codex": {"ok": True}, "plancia": {"ok": True}}
+    voci = (da_claude(esiti["claude"]) + da_codex(esiti["codex"]) + da_plancia(conn))
 
     # dove possibile la voce eredita il progetto della sessione che l'ha creata
     per_sessione = {r["session_id"]: r["project_id"] for r in conn.execute(
@@ -183,6 +197,11 @@ def sync(conn, progress=None) -> int:
     presenti = conn.execute("SELECT fonte, chiave FROM agenda").fetchall()
     tolte = 0
     for r in presenti:
+        # Se la fonte non ha risposto non si tocca niente di suo: cancellare le
+        # voci di Codex perché il suo database era occupato per un secondo vuol
+        # dire far sparire dalla lavagna lavoro che c'è.
+        if not esiti.get(r["fonte"], {"ok": True}).get("ok", True):
+            continue
         if (r["fonte"], r["chiave"]) not in viste:
             conn.execute("DELETE FROM agenda WHERE fonte=? AND chiave=?",
                          (r["fonte"], r["chiave"]))
