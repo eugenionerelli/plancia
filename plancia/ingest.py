@@ -812,6 +812,17 @@ def sync(full=False, progress=None, skip_git=False, modo="tutto") -> dict:
             result["git_locali"] = sync_local_git(conn, progress)
         result["archiviati"] = cura_progetti(conn, progress)
         result["commit_attribuiti"] = attribuisci_commit(conn, progress)
+        # Un lancio può morire anche senza che il server si fermi: se il
+        # processo non c'è più, la riga non deve restare "in corso" fino al
+        # prossimo riavvio.
+        try:
+            from . import cantiere
+            fermi = cantiere.riconcilia(conn)
+            if fermi and progress:
+                progress(f"lanci appesi chiusi: {fermi}")
+            result["lanci_chiusi"] = fermi
+        except Exception:
+            pass
         log("indice di ricerca", progress)
         store.rebuild_search(conn)
 
