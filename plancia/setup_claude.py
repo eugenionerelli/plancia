@@ -116,8 +116,8 @@ def install_mcp() -> str:
     # ripiego: scrittura diretta in ~/.claude.json
     path = config.CLAUDE_JSON
     if not path.exists():
-        return "server MCP non registrato: Claude Code non ha ancora scritto ~/.claude.json. "
-                "Aprilo una volta e poi rilancia `plancia install`"
+        return ("server MCP non registrato: Claude Code non ha ancora scritto "
+                "~/.claude.json. Aprilo una volta e poi rilancia `plancia install`")
     backup(path)
     data = json.loads(path.read_text("utf-8"))
     servers = data.setdefault("mcpServers", {})
