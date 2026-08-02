@@ -326,6 +326,29 @@ def main():
     prova("mette gli hook", (casa / ".claude/settings.json").exists())
     prova("mette il comando", (casa / ".local/bin/plancia").exists())
     prova("non tocca la casa vera", not (Path.home() / ".plancia-finta").exists())
+
+    # e disinstallandosi deve andarsene davvero, lasciando i file dell'utente
+    codice_via = (
+        "import sys, json, shutil, pathlib; sys.path.insert(0, %r)\n"
+        "from plancia import setup_claude as s\n"
+        "s.remove_hooks(); s.remove_mcp()\n"
+        "casa = pathlib.Path.home()\n"
+        "l = casa / '.local/bin/plancia'\n"
+        "l.unlink() if l.is_symlink() else None\n"
+        "[shutil.rmtree(d) for d in (s.SKILL_DIR, casa / '.claude/skills/riepilogo') if d.exists()]\n"
+        "j = json.loads((casa / '.claude.json').read_text())\n"
+        "st = json.loads((casa / '.claude/settings.json').read_text())\n"
+        "print(list((j.get('mcpServers') or {}).keys()), list((st.get('hooks') or {}).keys()))\n"
+        % str(RADICE))
+    via = subprocess.run([sys.executable, "-c", codice_via], capture_output=True, env=ambiente)
+    prova("la disinstallazione non si rompe", via.returncode == 0,
+          via.stderr.decode()[-200:])
+    prova("toglie il server MCP e gli hook", via.stdout.decode().strip() == "[] []",
+          via.stdout.decode().strip())
+    prova("porta via le skill", not (casa / ".claude/skills/plancia").exists())
+    prova("lascia al suo posto la configurazione tua",
+          (casa / ".claude/settings.json").exists() and (casa / ".claude.json").exists())
+
     shutil.rmtree(casa, ignore_errors=True)
 
     # ------------------------------------------------------------------- skill

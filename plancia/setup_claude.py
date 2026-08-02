@@ -530,6 +530,13 @@ def uninstall_all() -> list:
             shutil.rmtree(d)
     out.append("skill rimosse")
     out.append(f"i dati restano in {config.DATA_DIR}")
+    # Le copie di sicurezza restano apposta: se togliendosi di mezzo Plancia
+    # avesse rotto qualcosa, sono la strada per tornare indietro. Ma vanno
+    # dette, se no restano lì per sempre senza che nessuno sappia cosa sono.
+    copie = sorted(config.CLAUDE_DIR.glob("settings.json.plancia-backup-*"))
+    if copie:
+        out.append(f"copie di sicurezza dei tuoi settings, da buttare quando vuoi: "
+                   f"{len(copie)} in {config.CLAUDE_DIR}")
     return out
 
 
