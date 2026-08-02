@@ -236,10 +236,21 @@ deve puntare al lavoro reale che sta dietro al post: sha di un commit, nome di u
 repo, id di una sessione. La regola dell'account è che ogni post nasce da qualcosa
 che è successo davvero.
 
+**Ogni post nasce con la sua immagine.** Il campo `media` è il percorso del file
+che esce insieme al testo, e si riempie quando si scrive la bozza, non al momento
+di pubblicare: dopo non c'è più sotto mano il lavoro da cui è uscita. Un post
+senza immagine è l'eccezione e va motivata.
+
+Quando chiudi un lavoro che vale un post, l'immagine di solito ce l'hai già:
+uno screenshot già dentro il repo (`docs/img/...`), la dashboard di Plancia,
+il sito appena pubblicato. Se serve farne uno nuovo, fallo prima di salvare la
+bozza. Due regole imparate pubblicando: sotto i 400 KB, e guardalo prima di
+allegarlo, perché uno screenshot porta fuori tutto quello che era sullo schermo.
+
 La scrittura resta della skill `social-media-manager`, la pubblicazione della
-skill `x-account`, che chiede approvazione esplicita. Plancia tiene il conto:
-`plancia_posts` per lo stato della pipeline, `plancia_post_update` con l'url
-quando un post è davvero online.
+skill `x-account`, che chiede approvazione esplicita e sa allegare l'immagine
+dagli appunti di sistema. Plancia tiene il conto: `plancia_posts` per lo stato
+della pipeline, `plancia_post_update` con l'url quando un post è davvero online.
 
 ## Voce
 

@@ -97,17 +97,20 @@ TOOLS = [
         "description": (
             "Save a social post draft. source_ref must point at the real work behind it "
             "(a commit sha, a repo name, a session id): the account only posts about "
-            "things that actually happened. Saving a draft is not publishing."),
+            "things that actually happened. Saving a draft is not publishing. "
+            "media is the path to the image that goes out with the post: pick it now, "
+            "while you still know what the work looked like. A post without an image "
+            "is the exception."),
         "inputSchema": _s("", text=STR, platform=STR, status=STR, project=STR,
-                          source_ref=STR, url=STR, scheduled_for=STR),
+                          source_ref=STR, url=STR, scheduled_for=STR, media=STR),
     },
     {
         "name": "plancia_post_update",
         "description": (
-            "Update a post: status, url once published, metrics, text. Mark 'pubblicato' "
-            "only after it is actually live, and pass the url."),
+            "Update a post: status, url once published, metrics, text, media. Mark "
+            "'pubblicato' only after it is actually live, and pass the url."),
         "inputSchema": _s("", id=INT, status=STR, url=STR, text=STR, metrics=STR,
-                          scheduled_for=STR),
+                          scheduled_for=STR, media=STR),
     },
     {
         "name": "plancia_sessions",
@@ -253,13 +256,14 @@ def call_tool(name: str, args: dict) -> str:
             return _fmt(actions.post_add(
                 conn, args.get("text"), args.get("platform", "x"),
                 args.get("status", "bozza"), args.get("project"), args.get("url"),
-                args.get("source_ref", ""), args.get("scheduled_for")))
+                args.get("source_ref", ""), args.get("scheduled_for"),
+                media=args.get("media", "")))
 
         if name == "plancia_post_update":
             return _fmt(actions.post_update(
                 conn, int(args.get("id")), status=args.get("status"), url=args.get("url"),
                 text=args.get("text"), metrics=args.get("metrics"),
-                scheduled_for=args.get("scheduled_for")))
+                scheduled_for=args.get("scheduled_for"), media=args.get("media")))
 
         if name == "plancia_sessions":
             sql = ("SELECT s.session_id, s.title, substr(s.first_prompt,1,220) AS prompt, "

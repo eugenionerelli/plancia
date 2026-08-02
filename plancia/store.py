@@ -252,6 +252,10 @@ AGGIUNTE = {
     "commits": (("session_id", "TEXT DEFAULT ''"),),
     # il testo di una skill: è roba che ha scritto lui, e sta in un posto solo
     "capabilities": (("body", "TEXT DEFAULT ''"),),
+    # un post senza immagine è l'eccezione, non la regola. L'immagine si decide
+    # quando si scrive il post, insieme al testo: al momento di pubblicare non
+    # c'è più il contesto per sceglierla, e finiva ripescata a mano ogni volta.
+    "posts": (("media", "TEXT DEFAULT ''"),),
 }
 
 

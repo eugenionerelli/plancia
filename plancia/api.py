@@ -513,7 +513,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(actions.post_add(
                     conn, body.get("text"), body.get("platform", "x"),
                     body.get("status", "bozza"), body.get("project"), body.get("url"),
-                    body.get("source_ref", ""), body.get("scheduled_for")))
+                    body.get("source_ref", ""), body.get("scheduled_for"),
+                    media=body.get("media", "")))
             m = re.match(r"^/api/posts/(\d+)$", path)
             if m and method == "PATCH":
                 return self._json(actions.post_update(conn, int(m.group(1)), **body))

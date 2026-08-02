@@ -132,7 +132,7 @@ def tasks_list(conn, status=None, project=None, limit=50) -> list:
 # --------------------------------------------------------------------------
 
 def post_add(conn, text, platform="x", status="bozza", project=None, url=None,
-             source_ref="", scheduled_for=None, session_id=None) -> dict:
+             source_ref="", scheduled_for=None, session_id=None, media="") -> dict:
     text = (text or "").strip()
     if not text:
         raise BadInput("il testo del post non può essere vuoto")
@@ -143,10 +143,10 @@ def post_add(conn, text, platform="x", status="bozza", project=None, url=None,
     pid = _project_id(conn, project)
     cur = conn.execute(
         "INSERT INTO posts(platform, status, text, url, project_id, source_ref, "
-        "scheduled_for, published_at, session_id, created_at, updated_at) "
-        "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+        "scheduled_for, published_at, session_id, media, created_at, updated_at) "
+        "VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
         (platform, status, text, url, pid, source_ref or "", scheduled_for,
-         ts if status == "pubblicato" else None, session_id, ts, ts),
+         ts if status == "pubblicato" else None, session_id, media or "", ts, ts),
     )
     oid = cur.lastrowid
     store.add_event(conn, ts, "post", f"post {status}: {text[:60]}", platform, pid,
@@ -177,7 +177,7 @@ def post_update(conn, oid, **fields) -> dict:
         if status == "pubblicato":
             updates.append("published_at=?")
             values.append(fields.get("published_at") or store.now())
-    for col in ("text", "url", "source_ref", "scheduled_for", "platform"):
+    for col in ("text", "url", "source_ref", "scheduled_for", "platform", "media"):
         if fields.get(col) is not None:
             updates.append(f"{col}=?")
             values.append(fields[col])
