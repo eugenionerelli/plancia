@@ -1,5 +1,7 @@
 # Plancia
 
+[![collaudo](https://github.com/eugenionerelli/plancia/actions/workflows/prova.yml/badge.svg)](https://github.com/eugenionerelli/plancia/actions/workflows/prova.yml)
+
 One board for the work you do with AI. Claude Code and Codex already write down
 everything they do, in files on your disk. Nothing reads them together. Plancia
 does: every open task from both on one board, a spoken recap of the day that ends

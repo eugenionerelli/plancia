@@ -1,0 +1,28 @@
+# Il collaudo a ogni push. Gira su Linux di proposito: se passa lì vuol dire
+# che il cuore di Plancia è python e basta, senza niente di macOS sotto.
+name: collaudo
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  prova:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ['3.9', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: collaudo
+        run: python3 tools/prova.py
+      - name: front
+        run: python3 tools/prova-front.py

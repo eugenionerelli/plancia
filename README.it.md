@@ -1,5 +1,7 @@
 # Plancia
 
+[![collaudo](https://github.com/eugenionerelli/plancia/actions/workflows/prova.yml/badge.svg)](https://github.com/eugenionerelli/plancia/actions/workflows/prova.yml)
+
 Una lavagna sola per il lavoro che fai con l'IA. Claude Code e Codex si scrivono
 già tutto, in file sul tuo disco. Solo che non li legge nessuno insieme. Plancia
 sì: tutti i task aperti di tutti e due su una lavagna sola, un riepilogo parlato
