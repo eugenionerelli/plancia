@@ -448,9 +448,13 @@ def sync_sessions(conn, keywords, progress=None, full=False) -> int:
                                        "Plancia (chiamate interne)", kind="infra", hidden=1)
         elif cwd and not SCRATCH_RE.match(cwd):
             drive = drive_root()
-            # La radice del Drive non identifica niente: lì dentro si lavora a
-            # tutto. In quel caso il progetto si indovina da titolo e prompt.
-            generic = bool(drive) and os.path.normpath(cwd) == os.path.normpath(drive)
+            # Certe cartelle non identificano niente: la radice del Drive e la
+            # home sono posti da cui si lavora a tutto. Lì il progetto si
+            # indovina da titolo e primo messaggio.
+            radici_generiche = {os.path.normpath(str(config.HOME))}
+            if drive:
+                radici_generiche.add(os.path.normpath(drive))
+            generic = os.path.normpath(cwd) in radici_generiche
             resolved = None if generic else resolve_path_project(conn, cwd)
             if generic:
                 resolved = infer_project_by_keywords(
