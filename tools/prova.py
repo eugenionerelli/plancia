@@ -354,6 +354,17 @@ def main():
 
     shutil.rmtree(casa, ignore_errors=True)
 
+    # ------------------------------------------------------- skill in archivio
+    conn.execute("INSERT INTO capabilities(name, kind, description, path, meta, body, "
+                 "updated_at) VALUES('finta','skill','una skill di prova','/finta/SKILL.md',"
+                 "'{}','dentro c e scritto sciacquapanni', ?)", (store.now(),))
+    conn.commit()
+    store.rebuild_search(conn)
+    trovata = list(conn.execute(
+        "SELECT kind, title FROM search_fts WHERE search_fts MATCH 'sciacquapanni'"))
+    prova("il testo di una skill si ritrova cercando",
+          any(r["kind"] == "capacita" for r in trovata), str([dict(r) for r in trovata]))
+
     # ------------------------------------------------------------------- skill
     from plancia import setup_claude as _sc  # noqa: E402
     for nome, costante in (("plancia", _sc.SKILL), ("riepilogo", _sc.RIEPILOGO_SKILL)):

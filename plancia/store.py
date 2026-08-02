@@ -250,6 +250,8 @@ AGGIUNTE = {
               ("cwd", "TEXT DEFAULT ''"), ("run_id", "INTEGER")),
     # da quale conversazione è uscito questo commit
     "commits": (("session_id", "TEXT DEFAULT ''"),),
+    # il testo di una skill: è roba che ha scritto lui, e sta in un posto solo
+    "capabilities": (("body", "TEXT DEFAULT ''"),),
 }
 
 
@@ -451,6 +453,16 @@ def rebuild_search(conn) -> None:
         "INSERT INTO search_fts(kind, ref_id, title, body, project, ts) VALUES('memoria',?,?,?,?,?)",
         [(r["id"], r["name"], (r["description"] or "") + "\n" + (r["body"] or "")[:6000],
           r["pname"] or "", r["updated_at"] or "") for r in rows],
+    )
+    # Le skill sono testo che ha scritto lui: se non stanno nell'indice, "dove
+    # l'avevo scritto che non si usano gli em dash" non trova niente.
+    rows = conn.execute(
+        "SELECT id, name, description, body, updated_at FROM capabilities "
+        "WHERE kind IN ('skill','routine')").fetchall()
+    conn.executemany(
+        "INSERT INTO search_fts(kind, ref_id, title, body, project, ts) VALUES('capacita',?,?,?,?,?)",
+        [(r["id"], r["name"], (r["description"] or "") + "\n" + (r["body"] or "")[:8000],
+          "", r["updated_at"] or "") for r in rows],
     )
     rows = conn.execute(
         "SELECT s.id, s.title, s.first_prompt, s.started_at, p.name AS pname "

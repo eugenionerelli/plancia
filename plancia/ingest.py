@@ -17,6 +17,8 @@ from . import config, store
 # Oltre questa soglia una riga è quasi sempre un tool_result enorme: leggerla
 # con json.loads costa più di quello che vale. Se ne ricava il minimo a byte.
 MAX_PARSE = 256 * 1024
+# Una skill lunga è già una skill sbagliata: sopra i 64 KB si tiene l'inizio.
+MAX_SKILL = 64 * 1024
 SCRATCH_RE = re.compile(r"^(/private/)?(tmp|var)(/|$)|^/var/folders/")
 
 
@@ -227,14 +229,19 @@ def sync_memory(conn, progress=None) -> int:
 def sync_capabilities(conn, progress=None) -> int:
     found = 0
     for skill in sorted(config.CLAUDE_SKILLS.glob("*/SKILL.md")):
-        meta, _ = read_frontmatter(skill.read_text("utf-8", errors="replace")[:4000])
+        # Il testo intero, non solo il nome. Una skill è una cosa che ha scritto
+        # lui e che vive in un posto solo: tenerne il testo qui vuol dire poterla
+        # cercare con `plancia search` e ritrovarla se sparisce la cartella.
+        intero = skill.read_text("utf-8", errors="replace")
+        meta, corpo = read_frontmatter(intero[:MAX_SKILL])
         name = meta.get("name") or skill.parent.name
         conn.execute(
-            "INSERT INTO capabilities(name, kind, description, path, meta, updated_at) "
-            "VALUES(?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET name=excluded.name, "
-            "description=excluded.description, updated_at=excluded.updated_at",
+            "INSERT INTO capabilities(name, kind, description, path, meta, body, updated_at) "
+            "VALUES(?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET name=excluded.name, "
+            "description=excluded.description, body=excluded.body, "
+            "updated_at=excluded.updated_at",
             (name, "skill", meta.get("description", "")[:600], str(skill), "{}",
-             iso(skill.stat().st_mtime)),
+             intero[:MAX_SKILL], iso(skill.stat().st_mtime)),
         )
         row = store.find_project_by_link(conn, "skill", name)
         if row:
