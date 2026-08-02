@@ -18,6 +18,11 @@ from . import config
 from .voce_testo import per_voce
 
 VOICEBOX = "http://127.0.0.1:17493"
+# Pocket-TTS di Kyutai, se qualcuno lo tiene acceso. Misurato su questo Mac in
+# italiano, con il modello gia' caricato: 111 ms al primo audio contro i 42
+# secondi di Voicebox. Clona da un wav come l'altro, gira su due core e non
+# tocca il percorso MLX che qui fa cadere il server.
+POCKET = "http://127.0.0.1:8811"
 AUDIO_DIR = config.DATA_DIR / "audio"
 
 # Voci di sistema preferite per lingua, con il ripiego sulla prima che combacia.
@@ -120,6 +125,47 @@ def voicebox_vivo(timeout=1.5) -> bool:
     return False
 
 
+_pocket_no = 0.0
+
+
+def pocket_vivo(timeout=1.0) -> bool:
+    """C'è un Pocket-TTS in ascolto? Stessa regola di Voicebox: se non risponde
+    non glielo si richiede a ogni frase."""
+    global _pocket_no
+    if time.time() - _pocket_no < RIPROVA_DOPO:
+        return False
+    try:
+        code, _ = _get(f"{POCKET}/health", timeout=timeout)
+        if code == 200:
+            _pocket_no = 0.0
+            return True
+    except Exception:
+        pass
+    _pocket_no = time.time()
+    return False
+
+
+def sintesi_pocket(testo: str, out: Path, voce_wav: str = None, timeout=60) -> Path:
+    """Una POST multipart, perché è quello che accetta: text, e voice_wav per la
+    voce clonata."""
+    import uuid
+    conf = "----" + uuid.uuid4().hex
+    pezzi = [f"--{conf}\r\nContent-Disposition: form-data; name=\"text\"\r\n\r\n{testo}\r\n"]
+    corpo = "".join(pezzi).encode("utf-8")
+    if voce_wav and Path(voce_wav).exists():
+        dati = Path(voce_wav).read_bytes()
+        corpo += (f"--{conf}\r\nContent-Disposition: form-data; name=\"voice_wav\"; "
+                  f"filename=\"voce.wav\"\r\nContent-Type: audio/wav\r\n\r\n").encode() \
+            + dati + b"\r\n"
+    corpo += f"--{conf}--\r\n".encode()
+    req = urllib.request.Request(f"{POCKET}/tts", data=corpo, method="POST",
+                                 headers={"Content-Type":
+                                          f"multipart/form-data; boundary={conf}"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        out.write_bytes(r.read())
+    return out
+
+
 def voicebox_profili() -> list:
     try:
         _, body = _get(f"{VOICEBOX}/profiles")
@@ -210,7 +256,16 @@ def sintesi(testo: str, lang: str = "it", motore: str = None, cache=True,
         return {"file": str(out), "motore": "cache", "lingua": lang}
 
     usato = None
-    if motore in ("auto", "voicebox"):
+    # Prima si prova quello veloce, se c'è. Non è configurato da nessuna parte:
+    # o risponde, o non esiste, e in un decimo di secondo si sa quale delle due.
+    if motore in ("auto", "pocket"):
+        try:
+            if pocket_vivo():
+                sintesi_pocket(testo, out, config.load_config().get("voce_campione"))
+                usato = "pocket"
+        except Exception:
+            usato = None
+    if usato is None and motore in ("auto", "voicebox"):
         try:
             if motore == "voicebox" and config.load_config().get("voicebox_avvio_automatico"):
                 voicebox_avvia()

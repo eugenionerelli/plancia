@@ -115,6 +115,24 @@ Quello che è cambiato sotto:
   sulla strada della voce gli indirizzi diventano "su GitHub", dei percorsi resta
   l'ultimo pezzo, e gli sha spariscono. Sullo schermo il testo resta intero.
 
+### Se c'è Pocket-TTS acceso, Plancia lo usa
+
+Misurato su questo Mac, in italiano, con il modello caricato: **111 millisecondi**
+al primo audio contro i 42 secondi di Voicebox. Stessa macchina, stessa frase.
+
+Non c'è niente da configurare: Plancia guarda se qualcuno risponde su
+`127.0.0.1:8811` e se sì lo usa, altrimenti prova Voicebox, altrimenti la voce di
+sistema. Per accenderlo:
+
+```bash
+python3 -m venv ~/.pocket-tts && ~/.pocket-tts/bin/pip install pocket-tts
+~/.pocket-tts/bin/pocket-tts serve --port 8811 --language italian_24l
+```
+
+Il modello pesa 673 MB e si scarica da solo la prima volta. Clona da un wav come
+Voicebox: basta metterne il percorso in `voce_campione` dentro
+`~/.plancia/config.json`.
+
 ### La voce clonata ha una scadenza
 
 Misurato sul tuo Mac: Voicebox mette **42 secondi** a sintetizzare anche una
