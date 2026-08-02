@@ -306,6 +306,16 @@ def main():
         prova("app.js si compila", esito.returncode == 0,
               esito.stderr.decode()[:200])
 
+    # ------------------------------------------------------------------- skill
+    from plancia import setup_claude as _sc  # noqa: E402
+    for nome, costante in (("plancia", _sc.SKILL), ("riepilogo", _sc.RIEPILOGO_SKILL)):
+        prova(f"la skill {nome} parla delle cose che ci sono",
+              all(p in costante for p in (["plancia_lavagna", "plancia_manda", "proposta"]
+                                          if nome == "plancia" else ["proposta", "fallo"])),
+              "la skill nel repo è più vecchia del programma")
+        prova(f"la skill {nome} ha il suo frontmatter",
+              costante.lstrip().startswith("---") and "description:" in costante)
+
     # -------------------------------------------------------------------- front
     esito = subprocess.run([sys.executable, str(RADICE / "tools" / "prova-front.py")],
                            capture_output=True)

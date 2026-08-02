@@ -197,6 +197,33 @@ Prima di chiudere un lavoro sostanziale: aggiorna `next_action` del progetto e
 chiudi i task fatti con `plancia_task_update`. Non serve chiedere il permesso per
 scrivere in Plancia: è il suo archivio, non un'azione verso l'esterno.
 
+## La lavagna e i lanci
+
+`plancia_lavagna` è la lista unica di quello che è aperto adesso, di tutti e tre:
+le liste di task di Claude Code, gli obiettivi di Codex, i task di Plancia. Usala
+quando chiede "cosa c'è aperto", "su cosa siamo fermi", "cosa sta facendo Codex".
+Gli stati sono riportati agli stessi cinque: aperto, in corso, bloccato, fatto,
+sparito.
+
+`plancia_manda` fa partire un agente su un lavoro. Due modi, e il predefinito è
+`proposta`: l'agente legge e riferisce senza toccare un file. `esegui` lo lascia
+scrivere, e va scelto esplicitamente ogni volta, mai per iniziativa tua. Se lui
+non ha detto di eseguire, manda in proposta.
+
+`plancia_lanci` dice com'è andata: esito, token, costo. `plancia_eventi` legge il
+registro in append, utile a chi deve reagire a un lavoro finito.
+
+Se ti chiede di lanciare un lavoro mentre sei già dentro Claude Code, di solito
+conviene farlo tu invece di passare da `plancia_manda`: il lancio serve quando il
+lavoro deve andare a un altro agente o in un'altra cartella.
+
+## Le proposte
+
+Il riepilogo finisce con le cose che converrebbe fare, calcolate dai segnali nei
+dati e mai inventate. Se ti chiede "cosa dovrei fare adesso", `plancia_recap` le
+contiene già: non aggiungerne di tue sopra quelle, semmai spiega perché una è la
+prima.
+
 ## Social
 
 `plancia_post_add` salva una bozza, non pubblica niente. Il campo `source_ref`
@@ -228,6 +255,12 @@ vista, segnare un task, chiuderlo, rileggere le fonti, il riepilogo) partono
 subito; tutto il resto arriva a Claude Code con i tool `plancia_*` aperti, quindi
 può agire davvero.
 
+Puoi interromperlo mentre parla: basta ricominciare a parlare, il microfono
+resta aperto anche mentre risponde. "Annulla" ferma un lavoro partito, "basta"
+chiude il pannello, "ripeti" ridice l'ultima cosa, "più piano" e "più veloce"
+cambiano la velocità della voce. Quando un lancio finisce te lo dice a voce anche se nel
+frattempo stavi facendo altro.
+
 `plancia jarvis "frase"` fa la stessa cosa da terminale, senza microfono.
 
 Tre strade in ordine: i comandi e le domande sui dati si risolvono in un decimo
@@ -244,6 +277,10 @@ quando i due si sono passati il lavoro.
 ## Comandi
 
 ```bash
+plancia lavagna          # tutto quello che è aperto, di tutti gli agenti
+plancia manda "..." --agente codex --modo proposta
+plancia lanci            # com'è andata
+plancia eventi --dopo <id>
 plancia recap --speak    # riepilogo letto ad alta voce
 plancia jarvis "..."     # un comando vocale scritto
 plancia ask "..." --speak
@@ -286,6 +323,22 @@ Dentro `dati` c'è tutto il dettaglio: sessioni, commit, task chiusi e aperti,
 post, progetti fermi. Usalo per rispondere alle domande che fa dopo, senza
 rigenerare il riepilogo.
 
+## Il riepilogo finisce con una proposta
+
+Dopo i fatti arriva la cosa che converrebbe fare, e non è un consiglio generico:
+nasce da un segnale nei dati. Un lancio fallito, un obiettivo di Codex senza
+quota, file non committati da ieri, un post approvato e mai uscito, il prossimo
+passo di un progetto fermo.
+
+Se lui risponde "fallo", "la seconda", "eseguilo", quella frase va passata a
+Plancia così com'è: `plancia_manda` con quello che dice la proposta, oppure
+lasciando fare al pannello vocale. **Non decidere tu di eseguire**: il modo
+predefinito guarda e riferisce, e scrivere sui file è una scelta che fa lui ogni
+volta.
+
+Se il segnale non c'è, la proposta non c'è, ed è voluto. Non aggiungerne una tua
+per riempire il finale.
+
 ## Cosa non fare
 
 Non aggiungere risultati che non sono nei dati. Se la giornata è stata vuota, il
@@ -294,6 +347,9 @@ lo rende inutile la volta dopo.
 
 Non leggere ad alta voce senza che lo abbia chiesto. L'audio esce dalle casse del
 suo Mac e potrebbe non essere solo.
+
+Non riscrivere il testo per la voce: ci pensa Plancia, che toglie indirizzi,
+percorsi e sha prima di dirlo, perché letti ad alta voce sono una filastrocca.
 
 ## Ogni mattina
 
