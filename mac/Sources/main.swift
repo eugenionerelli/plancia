@@ -434,12 +434,31 @@ final class VoicePanel: NSWindowController {
 
 // MARK: - applicazione
 
+extension WKWebView {
+    /// Altezza vera del documento, per non tagliare il PDF a metà pagina.
+    func scrollView_altezza() -> CGFloat {
+        var h: CGFloat = 900
+        let semaforo = DispatchSemaphore(value: 0)
+        evaluateJavaScript("document.body.scrollHeight") { r, _ in
+            if let n = r as? CGFloat { h = n } else if let n = r as? Double { h = CGFloat(n) }
+            semaforo.signal()
+        }
+        _ = semaforo.wait(timeout: .now() + 0.4)
+        return max(700, h)
+    }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
     private var window: NSWindow!
     private var web: WKWebView!
     private let backend = Backend()
     private var statusItem: NSStatusItem!
     private lazy var voce = VoicePanel()
+    private lazy var jarvis: JarvisPanel = {
+        let p = JarvisPanel()
+        p.onAzione = { [weak self] a in self?.eseguiAzione(a) }
+        return p
+    }()
     private var timerRiepilogo: Timer?
 
     /// L'evento di apertura URL va agganciato prima che l'app finisca di
@@ -464,6 +483,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
         costruisciMenuBar()
         costruisciMenuPrincipale()
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+
+        Scorciatoia.azione = { [weak self] in self?.apriJarvis() }
+        Scorciatoia.registra()
 
         backend.ensureRunning { ok in
             if ok {
@@ -526,8 +548,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
             button.image?.isTemplate = true
         }
         let menu = NSMenu()
+        menu.addItem(voceMenu("Jarvis  ⌥Spazio", #selector(apriJarvis), "j"))
         menu.addItem(voceMenu("Riepilogo vocale", #selector(riepilogoVocale), "r"))
-        menu.addItem(voceMenu("Chiedi a Plancia", #selector(apriVoce), "j"))
+        menu.addItem(voceMenu("Chiedi a Plancia", #selector(apriVoce), "d"))
         menu.addItem(NSMenuItem.separator())
         menu.addItem(voceMenu("Apri la dashboard", #selector(apriFinestra), "o"))
         menu.addItem(voceMenu("Aggiorna i dati", #selector(sincronizza), "u"))
@@ -549,7 +572,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
         main.addItem(appItem)
         let appMenu = NSMenu()
         appMenu.addItem(voceMenu("Riepilogo vocale", #selector(riepilogoVocale), "r"))
-        appMenu.addItem(voceMenu("Chiedi a Plancia", #selector(apriVoce), "j"))
+        appMenu.addItem(voceMenu("Jarvis", #selector(apriJarvis), "j"))
+        appMenu.addItem(voceMenu("Chiedi a Plancia", #selector(apriVoce), "d"))
         appMenu.addItem(voceMenu("Aggiorna i dati", #selector(sincronizza), "u"))
         appMenu.addItem(NSMenuItem.separator())
         // Nascondi va al responder chain, non a noi
@@ -576,6 +600,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
     @objc func ricarica() { carica() }
     @objc func schermoIntero() { window.toggleFullScreen(nil) }
     @objc func apriVoce() { voce.apri() }
+    @objc func apriJarvis() { jarvis.apri() }
+
+    /// Quello che Jarvis decide di fare sull'app: cambiare vista, aprire un
+    /// progetto, rileggere le fonti.
+    private func eseguiAzione(_ a: [String: Any]) {
+        switch a["tipo"] as? String {
+        case "vai":
+            if let v = a["vista"] as? String { vai(vista: v, ui: nil) }
+        case "progetto":
+            if let k = a["chiave"] as? String {
+                vai(vista: "progetti", ui: nil)
+                let js = #"setTimeout(function(){var e=document.querySelector('[data-project="\#(k)"]'); if (e) e.click();}, 700)"#
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    self.web.evaluateJavaScript(js, completionHandler: nil)
+                }
+            }
+        case "aggiorna":
+            sincronizza()
+        default:
+            break
+        }
+        if a["tipo"] as? String != "ferma" { apriFinestra() }
+    }
     @objc func riepilogoVocale() { voce.apriEriepiloga() }
     @objc func sincronizza() {
         API.request("/api/sync", method: "POST", body: [:]) { _, _ in
@@ -585,6 +632,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
     /// Salva la finestra in un PNG. Serve per gli screenshot dei post e per
     /// vedere com'è venuta senza dover essere davanti al Mac.
     @objc func schermata() {
+        // Con la finestra coperta il sistema non aggiorna il disegno della
+        // pagina e lo scatto esce vuoto: prima si porta davanti, poi si aspetta
+        // un giro di disegno.
+        // Se davanti c'è un'app a tutto schermo, la finestra sta in un altro
+        // Spazio ed è considerata coperta: WebKit smette di disegnare e lo
+        // scatto esce a metà. La si porta sullo Spazio corrente per il tempo
+        // dello scatto e poi si rimette com'era.
+        let comportamento = window.collectionBehavior
+        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.orderFrontRegardless()
+        NSApp.activate(ignoringOtherApps: true)
+        attendiVisibile(tentativi: 24) {
+            self.scatta()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                self.window.collectionBehavior = comportamento
+            }
+        }
+    }
+
+    /// WebKit smette di disegnare quando la finestra è coperta: lo scatto
+    /// uscirebbe con la sola parte già disegnata. Si aspetta che il sistema la
+    /// dichiari visibile, non un tempo a caso.
+    private func attendiVisibile(tentativi: Int, poi: @escaping () -> Void) {
+        if tentativi <= 0 || window.occlusionState.contains(.visible) {
+            return DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: poi)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            self.attendiVisibile(tentativi: tentativi - 1, poi: poi)
+        }
+    }
+
+    /// Il PDF non copia quello che c'è sullo schermo: ridisegna la pagina da
+    /// zero. È l'unico modo per avere l'immagine giusta anche quando la
+    /// finestra è coperta da un'app a tutto schermo.
+    private func scattaPDF(_ done: @escaping (URL?) -> Void) {
+        let conf = WKPDFConfiguration()
+        conf.rect = CGRect(x: 0, y: 0, width: web.bounds.width,
+                           height: min(web.scrollView_altezza(), 2400))
+        web.createPDF(configuration: conf) { esito in
+            switch esito {
+            case .success(let dati):
+                let dir = Conf.dataDir.appendingPathComponent("shots")
+                try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                let f = DateFormatter()
+                f.dateFormat = "yyyyMMdd-HHmmss"
+                let dest = dir.appendingPathComponent("plancia-\(f.string(from: Date())).pdf")
+                try? dati.write(to: dest)
+                Log.write("pdf salvato: \(dest.path)")
+                done(dest)
+            case .failure(let e):
+                Log.write("pdf fallito: \(e.localizedDescription)")
+                done(nil)
+            }
+        }
+    }
+
+    private func scatta() {
         let conf = WKSnapshotConfiguration()
         conf.afterScreenUpdates = true
         web.takeSnapshot(with: conf) { image, errore in
@@ -648,6 +752,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKNavigationDelegate {
             if !q.isEmpty { voce.chiediTesto(q) }
         case "sync", "aggiorna": sincronizza()
         case "screenshot", "schermata": schermata()
+        case "pdf": scattaPDF { _ in }
+        case "jarvis":
+            let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            if let frase = q.first(where: { $0.name == "say" })?.value, !frase.isEmpty {
+                jarvis.detta(frase)
+            } else if q.contains(where: { $0.name == "shot" }) {
+                let dir = Conf.dataDir.appendingPathComponent("shots")
+                try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+                if let f = jarvis.schermata(in: dir) { Log.write("schermata jarvis: \(f.path)") }
+            } else {
+                apriJarvis()
+            }
         case "open", "apri", "vista":
             let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
             let vista = q.first(where: { $0.name == "view" })?.value

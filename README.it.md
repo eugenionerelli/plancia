@@ -41,11 +41,11 @@ cd ~/dev/plancia
 ## Le tre porte
 
 **L'app.** Finestra nativa, voce nella barra dei menu, e tiene su il backend da
-sola. `plancia://recap`, `plancia://ask?q=…`, `plancia://open?view=progetti`,
-`plancia://screenshot` sono azioni da legare a una scorciatoia di sistema, a
+sola. `plancia://recap`, `plancia://jarvis`, `plancia://ask?q=…`, `plancia://open?view=progetti` e
+`plancia://pdf` sono azioni da legare a una scorciatoia di sistema, a
 Raycast o a Comandi rapidi.
 
-**Claude Code.** Sedici tool `plancia_*` in ogni sessione, un hook `SessionStart`
+**Claude Code e Codex.** Sedici tool `plancia_*` in ogni sessione di tutti e due, un hook `SessionStart`
 che passa a Claude il tuo stato attuale come contesto iniziale, e due skill che
 gli dicono quando leggere da Plancia e quando scriverci.
 
@@ -82,6 +82,36 @@ plancia daily on 08:45 --voce    # ogni mattina, letto
 
 Le domande passano da Claude Code con il contesto di Plancia già allegato, quindi
 la risposta sta su quello che è successo davvero e non su un'ipotesi.
+
+## Jarvis
+
+![Agenti](docs/agents.png)
+
+Non tieni premuto niente. `⌥Spazio` da qualsiasi app, oppure `plancia://jarvis`,
+apre un pannello che ascolta di continuo e capisce dal silenzio che hai finito di
+parlare, non da un tasto tenuto giù.
+
+Quello che sente prende due strade. Le frasi che riconosce con certezza (apri una
+vista, segna un task, chiudilo, rileggi le fonti, leggimi il riepilogo) partono in
+un decimo di secondo, in locale. Tutto il resto va a Claude Code in modalità non
+interattiva con i tool `plancia_*` aperti, quindi il task lo aggiunge davvero, il
+progetto lo aggiorna davvero, l'archivio lo cerca davvero.
+
+```bash
+plancia jarvis "ricordami di scrivere la nota di migrazione"   # lo stesso, scritto
+```
+
+Claude Code ha la voce [da marzo 2026](https://claudefa.st/blog/guide/mechanics/voice-mode):
+tieni premuta la barra spaziatrice e detti. È solo dettatura in ingresso, e una
+modalità a mani libere non c'è per scelta. Questa è l'altra metà: risponde e
+agisce.
+
+## Due agenti, un archivio solo
+
+Plancia legge le sessioni di Codex da `~/.codex/sessions` insieme a quelle di
+Claude Code, e registra il proprio server MCP dentro `~/.codex/config.toml`. I due
+agenti vedono gli stessi progetti, gli stessi task, gli stessi sedici tool. La
+vista Agenti mostra chi ha lavorato su cosa e quando si sono passati il lavoro.
 
 ## Progetti
 

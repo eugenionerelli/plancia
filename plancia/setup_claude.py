@@ -219,10 +219,29 @@ per l'occhio.
 Le lingue sono it, en, es, fr, de, pt. Se non la specifica, vale quella in
 `~/.plancia/config.json`.
 
+## Jarvis
+
+`plancia://jarvis` apre il pannello vocale a mani libere, oppure ⌥Spazio da
+qualsiasi app. Ascolta di continuo, capisce dal silenzio quando ha finito di
+parlare, esegue e risponde a voce. I comandi che riconosce da solo (aprire una
+vista, segnare un task, chiuderlo, rileggere le fonti, il riepilogo) partono
+subito; tutto il resto arriva a Claude Code con i tool `plancia_*` aperti, quindi
+può agire davvero.
+
+`plancia jarvis "frase"` fa la stessa cosa da terminale, senza microfono.
+
+## I due agenti
+
+Plancia legge anche le sessioni di Codex da `~/.codex/sessions` e registra il
+proprio server MCP dentro `~/.codex/config.toml`: Codex e Claude vedono lo stesso
+archivio e gli stessi tool. La vista Agenti mostra chi ha lavorato su cosa e
+quando i due si sono passati il lavoro.
+
 ## Comandi
 
 ```bash
 plancia recap --speak    # riepilogo letto ad alta voce
+plancia jarvis "..."     # un comando vocale scritto
 plancia ask "..." --speak
 plancia daily on 08:45   # riepilogo automatico ogni mattina
 plancia serve --open     # dashboard
@@ -431,12 +450,15 @@ def install_all() -> list:
         path = BIN / script
         if path.exists():
             path.chmod(0o755)
-    return [install_command(), install_mcp(), install_hooks(), install_skill(),
-            autostart_on()]
+    from . import codex
+    return [install_command(), install_mcp(), codex.registra_mcp(), install_hooks(),
+            install_skill(), autostart_on()]
 
 
 def uninstall_all() -> list:
-    out = [recap_daily_off(), autostart_off(), remove_hooks(), remove_mcp()]
+    from . import codex
+    out = [recap_daily_off(), autostart_off(), remove_hooks(), remove_mcp(),
+           codex.rimuovi_mcp()]
     link = Path.home() / ".local" / "bin" / "plancia"
     if link.is_symlink():
         link.unlink()
@@ -467,6 +489,10 @@ def doctor() -> list:
             conn.close()
     lines.append(f"{ok(mcp_installed())}server MCP registrato in ~/.claude.json")
     lines.append(f"{ok(hooks_installed())}hook SessionStart/SessionEnd")
+    from . import codex
+    cx = codex.stato()
+    lines.append(f"{ok(cx['installato'])}Codex trovato ({cx['sessioni']} sessioni)")
+    lines.append(f"{ok(cx['mcp'])}server MCP registrato anche in Codex")
     lines.append(f"{ok((SKILL_DIR / 'SKILL.md').exists())}skill plancia")
     lines.append(f"{ok(autostart_installed())}avvio automatico (launchd)")
     ora = config.load_config().get("riepilogo_ora")

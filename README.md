@@ -42,10 +42,11 @@ cd ~/dev/plancia
 
 **The app.** A native window, a menu bar item, and the voice. It supervises the
 backend, so there is nothing to start by hand. `plancia://recap`,
-`plancia://ask?q=…`, `plancia://open?view=projects`, `plancia://screenshot` are
+`plancia://jarvis`, `plancia://ask?q=…`, `plancia://open?view=projects` and
+`plancia://pdf` are
 URL actions you can bind to a system shortcut, Raycast or Shortcuts.
 
-**Claude Code.** Sixteen `plancia_*` MCP tools in every session, a `SessionStart`
+**Claude Code and Codex.** Sixteen `plancia_*` MCP tools in every session of both, a `SessionStart`
 hook that hands Claude your current state as opening context, and two skills that
 tell it when to read from Plancia and when to write back.
 
@@ -81,6 +82,35 @@ plancia daily on 08:45 --voce    # every morning, out loud
 
 Asking a question goes through Claude Code with your Plancia context attached, so
 the answer is grounded in what actually happened, not in a guess.
+
+## Jarvis
+
+![Agents](docs/agents.png)
+
+Hold nothing, press nothing. `⌥Space` anywhere, or `plancia://jarvis`, opens a
+panel that listens continuously and works out you have finished speaking from the
+silence, not from a key you keep held down.
+
+What it hears goes two ways. Phrases it can recognise with certainty — open a
+view, note a task, close one, re-read the sources, read me the recap — run
+locally in a tenth of a second. Everything else goes to Claude Code in headless
+mode with the `plancia_*` tools open, so it can actually add the task, update the
+project or search the archive, not just answer about it.
+
+```bash
+plancia jarvis "remind me to write the migration note"   # same thing, typed
+```
+
+Claude Code has had [voice input since March 2026](https://claudefa.st/blog/guide/mechanics/voice-mode):
+you hold the spacebar and dictate. It is input only, and by design there is no
+hands-free mode. This is the other half: it speaks back, and it acts.
+
+## Two agents, one archive
+
+Plancia reads Codex sessions from `~/.codex/sessions` alongside Claude Code's,
+and registers its own MCP server inside `~/.codex/config.toml`. Both agents see
+the same projects, the same tasks, the same sixteen tools. The Agents view shows
+who worked on what and when the two handed work to each other.
 
 ## Projects
 

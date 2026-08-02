@@ -70,6 +70,17 @@ def cmd_ask(args):
                     attendi=not args.background)
 
 
+def cmd_jarvis(args):
+    from . import jarvis, voice
+    frase = " ".join(args.frase)
+    esito = jarvis.esegui(frase, args.lang)
+    print(f"[{esito['tipo']}] {esito['risposta']}")
+    if esito.get("azione"):
+        print(f"  azione: {esito['azione']}")
+    if args.speak and not esito.get("muto"):
+        voice.parla(esito["risposta"], esito.get("lingua", "it"), attendi=True)
+
+
 def cmd_say(args):
     from . import recap, voice
     testo = " ".join(args.testo)
@@ -264,6 +275,12 @@ def build_parser():
     s.add_argument("--voce", choices=["auto", "voicebox", "say"])
     s.add_argument("--background", action="store_true")
     s.set_defaults(func=cmd_ask)
+
+    s = sub.add_parser("jarvis", help="esegui un comando vocale scritto")
+    s.add_argument("frase", nargs="+")
+    s.add_argument("--lang")
+    s.add_argument("--speak", action="store_true")
+    s.set_defaults(func=cmd_jarvis)
 
     s = sub.add_parser("say", help="leggi una frase con la voce configurata")
     s.add_argument("testo", nargs="+")

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from . import config
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (
@@ -65,6 +65,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   tools TEXT,
   in_tokens INTEGER DEFAULT 0,
   out_tokens INTEGER DEFAULT 0,
+  agent TEXT DEFAULT 'claude',
+  scambi INTEGER DEFAULT 0,
   updated_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at DESC);
@@ -199,8 +201,18 @@ def has_fts(conn: sqlite3.Connection) -> bool:
     return row is not None
 
 
+def migrate(conn: sqlite3.Connection) -> None:
+    """Colonne aggiunte dopo: SQLite non ha ALTER condizionale."""
+    presenti = {r["name"] for r in conn.execute("PRAGMA table_info(sessions)")}
+    for colonna, definizione in (("agent", "TEXT DEFAULT 'claude'"),
+                                 ("scambi", "INTEGER DEFAULT 0")):
+        if colonna not in presenti:
+            conn.execute(f"ALTER TABLE sessions ADD COLUMN {colonna} {definizione}")
+
+
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    migrate(conn)
     try:
         conn.executescript(FTS_SCHEMA)
     except sqlite3.OperationalError:

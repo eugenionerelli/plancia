@@ -280,6 +280,49 @@ def sync_capabilities(conn, progress=None) -> int:
 # 4. sessioni di Claude Code (incrementale, byte per byte)
 # --------------------------------------------------------------------------
 
+def progetto_per_cartella(conn, cwd: str, keywords: dict, testo: str = ""):
+    """A quale progetto appartiene una sessione aperta da questa cartella.
+
+    Vale per Claude Code e per Codex: cambia il formato del transcript, non il
+    significato di una cartella di lavoro.
+    """
+    if not cwd:
+        return None
+    normale = os.path.normpath(cwd)
+    if normale == os.path.normpath(str(config.DATA_DIR)):
+        # è Plancia che ha chiamato un agente per il riepilogo, non lavoro suo
+        return store.upsert_project(conn, "plancia-interno", "Plancia (chiamate interne)",
+                                    kind="infra", hidden=1)
+    if SCRATCH_RE.match(cwd):
+        return store.upsert_project(conn, "temporanee", "Sessioni temporanee",
+                                    kind="infra", hidden=1)
+
+    # Certe cartelle non identificano niente. La home e la radice del Drive sono
+    # posti da cui si lavora a tutto; Codex invece apre una cartella nuova per
+    # ogni conversazione sotto ~/Documents/Codex, col nome preso dalla domanda:
+    # sono nomi di chat, non di progetti. In tutti questi casi il progetto si
+    # indovina dal testo.
+    radici_generiche = {os.path.normpath(str(config.HOME))}
+    drive = drive_root()
+    if drive:
+        radici_generiche.add(os.path.normpath(drive))
+    effimere = [os.path.normpath(str(config.HOME / "Documents/Codex"))]
+    effimere += [expand(r) for r in config.load_config().get("cartelle_effimere", [])]
+    generica = normale in radici_generiche or any(
+        normale == e or normale.startswith(e + os.sep) for e in effimere if e)
+    if generica:
+        trovato = infer_project_by_keywords(testo, keywords)
+        return trovato or store.upsert_project(conn, "drive-workspace",
+                                               "Senza progetto", kind="infra")
+
+    trovato = resolve_path_project(conn, cwd)
+    if trovato is None:
+        base = os.path.basename(cwd.rstrip("/")) or cwd
+        trovato = store.upsert_project(conn, base, base.replace("-", " "), kind="progetto")
+        store.link_project(conn, trovato, "path", normale)
+    return trovato
+
+
 def _bytes_field(raw: bytes, key: bytes, limit: int = 400):
     """Estrae "key":"valore" senza parsare tutta la riga."""
     idx = raw.find(key)
@@ -442,35 +485,9 @@ def sync_sessions(conn, keywords, progress=None, full=False) -> int:
         cwd = acc["cwd"]
 
         pid = row["project_id"] if row else None
-        if cwd and os.path.normpath(cwd) == os.path.normpath(str(config.DATA_DIR)):
-            # è Plancia che ha chiamato Claude per il riepilogo, non lavoro suo
-            pid = store.upsert_project(conn, "plancia-interno",
-                                       "Plancia (chiamate interne)", kind="infra", hidden=1)
-        elif cwd and not SCRATCH_RE.match(cwd):
-            drive = drive_root()
-            # Certe cartelle non identificano niente: la radice del Drive e la
-            # home sono posti da cui si lavora a tutto. Lì il progetto si
-            # indovina da titolo e primo messaggio.
-            radici_generiche = {os.path.normpath(str(config.HOME))}
-            if drive:
-                radici_generiche.add(os.path.normpath(drive))
-            generic = os.path.normpath(cwd) in radici_generiche
-            resolved = None if generic else resolve_path_project(conn, cwd)
-            if generic:
-                resolved = infer_project_by_keywords(
-                    f"{title or ''} {first_prompt or ''}", keywords)
-                if resolved is None:
-                    resolved = store.upsert_project(conn, "drive-workspace",
-                                                    "Drive (senza progetto)", kind="infra")
-            elif resolved is None:
-                base = os.path.basename(cwd.rstrip("/")) or cwd
-                resolved = store.upsert_project(conn, base, base.replace("-", " "),
-                                                kind="progetto")
-                store.link_project(conn, resolved, "path", os.path.normpath(cwd))
-            pid = resolved
-        elif cwd:
-            pid = store.upsert_project(conn, "temporanee", "Sessioni temporanee",
-                                       kind="infra", hidden=1)
+        if cwd:
+            pid = progetto_per_cartella(conn, cwd, keywords,
+                                        f"{title or ''} {first_prompt or ''}")
 
         conn.execute(
             "INSERT INTO sessions(session_id, project_id, file, bytes_scanned, file_size, "
@@ -699,6 +716,8 @@ def sync(full=False, progress=None, skip_git=False) -> dict:
     result["capacita"] = sync_capabilities(conn, progress)
     result["hook"] = drain_queue(conn, progress)
     result["sessioni"] = sync_sessions(conn, keywords, progress, full=full)
+    from . import codex
+    result["codex"] = codex.sync(conn, keywords, progress, full=full)
     if not skip_git:
         result["repo"] = sync_repos(conn, progress)
         result["git_locali"] = sync_local_git(conn, progress)

@@ -14,7 +14,7 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import actions, briefing, config, ingest, recap, store, voice
+from . import actions, briefing, config, ingest, jarvis, recap, store, voice
 
 SYNC_LOCK = threading.Lock()
 SYNC_STATE = {"running": False, "message": "", "started": None, "result": None}
@@ -60,6 +60,7 @@ def overview(conn) -> dict:
         "post_pubblicati": one("SELECT COUNT(*) FROM posts WHERE status='pubblicato'"),
         "post_in_coda": one("SELECT COUNT(*) FROM posts WHERE status IN ('idea','bozza','approvato','programmato')"),
         "memorie": one("SELECT COUNT(*) FROM knowledge"),
+        "scambi": one(f"SELECT COUNT(*) FROM sessions s WHERE scambi > 0 AND {store.visibile()}"),
         "token_out_mese": one(f"SELECT COALESCE(SUM(out_tokens),0) FROM sessions s WHERE started_at > ? AND {store.visibile()}", (month,)),
     }
 
@@ -76,27 +77,37 @@ def overview(conn) -> dict:
     events = [dict(r) for r in conn.execute(
         "SELECT e.*, p.name AS progetto, p.key AS project_key FROM events e "
         f"LEFT JOIN projects p ON p.id=e.project_id WHERE {store.visibile('e')} "
-        "ORDER BY e.ts DESC LIMIT 60"
+        "AND e.kind <> 'hook' ORDER BY e.ts DESC LIMIT 60"
     ).fetchall()]
 
-    # attività per giorno, ultimi 30
+    # attività per giorno, ultimi 30, separata per agente
+    vuoto = {"claude": 0, "codex": 0, "commit": 0}
     activity = {}
     for row in conn.execute(
-            f"SELECT substr(started_at,1,10) AS d, COUNT(*) AS n FROM sessions s "
-            f"WHERE started_at > ? AND {store.visibile()} GROUP BY d", (month,)):
-        activity.setdefault(row["d"], {"sessioni": 0, "commit": 0})["sessioni"] = row["n"]
+            f"SELECT substr(started_at,1,10) AS d, COALESCE(agent,'claude') AS a, "
+            f"COUNT(*) AS n FROM sessions s WHERE started_at > ? AND {store.visibile()} "
+            f"GROUP BY d, a", (month,)):
+        activity.setdefault(row["d"], dict(vuoto))[row["a"]] = row["n"]
     for row in conn.execute(
             "SELECT substr(date,1,10) AS d, COUNT(*) AS n FROM commits WHERE date > ? GROUP BY d",
             (month,)):
-        activity.setdefault(row["d"], {"sessioni": 0, "commit": 0})["commit"] = row["n"]
+        activity.setdefault(row["d"], dict(vuoto))["commit"] = row["n"]
     days = []
     for i in range(29, -1, -1):
         day = (datetime.now(timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
-        cell = activity.get(day, {"sessioni": 0, "commit": 0})
-        days.append({"giorno": day, **cell})
+        cell = activity.get(day, dict(vuoto))
+        days.append({"giorno": day, "sessioni": cell["claude"] + cell["codex"], **cell})
+
+    agenti = [dict(r) for r in conn.execute(
+        f"SELECT COALESCE(agent,'claude') AS agente, COUNT(*) AS sessioni, "
+        f"COALESCE(SUM(out_tokens),0) AS token, COALESCE(SUM(n_tools),0) AS tool, "
+        f"COALESCE(SUM(n_user),0) AS scambi_tuoi, MAX(started_at) AS ultimo "
+        f"FROM sessions s WHERE {store.visibile()} GROUP BY agente ORDER BY token DESC"
+    ).fetchall()]
 
     return {
         "stats": stats,
+        "agenti": agenti,
         "progetti": projects,
         "task": actions.tasks_list(conn, "aperti", limit=20),
         "post": actions.posts_list(conn, limit=40),
@@ -255,6 +266,9 @@ class Handler(BaseHTTPRequestHandler):
                 sql = ("SELECT s.*, p.name AS progetto, p.key AS project_key FROM sessions s "
                        "LEFT JOIN projects p ON p.id=s.project_id WHERE 1=1")
                 params = []
+                if first("agent"):
+                    sql += " AND COALESCE(s.agent,'claude')=?"
+                    params.append(first("agent"))
                 if first("project"):
                     row = store.get_project(conn, first("project"))
                     sql += " AND s.project_id=?"
@@ -285,6 +299,33 @@ class Handler(BaseHTTPRequestHandler):
                     "p.name AS progetto, p.key AS project_key FROM knowledge k "
                     "LEFT JOIN projects p ON p.id=k.project_id ORDER BY k.updated_at DESC"
                 ).fetchall()])
+            if path == "/api/agents":
+                mese = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+                totali = [dict(r) for r in conn.execute(
+                    f"SELECT COALESCE(agent,'claude') AS agente, COUNT(*) AS sessioni, "
+                    f"COALESCE(SUM(out_tokens),0) AS token, COALESCE(SUM(n_tools),0) AS tool, "
+                    f"COALESCE(SUM(n_user),0) AS messaggi, COALESCE(SUM(scambi),0) AS scambi, "
+                    f"MIN(started_at) AS primo, MAX(started_at) AS ultimo "
+                    f"FROM sessions s WHERE {store.visibile()} GROUP BY agente").fetchall()]
+                per_giorno = [dict(r) for r in conn.execute(
+                    f"SELECT substr(started_at,1,10) AS giorno, COALESCE(agent,'claude') AS agente, "
+                    f"COUNT(*) AS n FROM sessions s WHERE started_at > ? AND {store.visibile()} "
+                    f"GROUP BY giorno, agente", (mese,)).fetchall()]
+                per_progetto = [dict(r) for r in conn.execute(
+                    f"SELECT p.name AS progetto, p.key AS chiave, "
+                    f"SUM(CASE WHEN COALESCE(s.agent,'claude')='claude' THEN 1 ELSE 0 END) AS claude, "
+                    f"SUM(CASE WHEN s.agent='codex' THEN 1 ELSE 0 END) AS codex "
+                    f"FROM sessions s JOIN projects p ON p.id=s.project_id "
+                    f"WHERE p.hidden=0 GROUP BY p.id HAVING claude+codex > 0 "
+                    f"ORDER BY claude+codex DESC LIMIT 12").fetchall()]
+                scambi = [dict(r) for r in conn.execute(
+                    "SELECT e.ts, e.title, e.detail, p.name AS progetto FROM events e "
+                    "LEFT JOIN projects p ON p.id=e.project_id WHERE e.kind='scambio' "
+                    "ORDER BY e.ts DESC LIMIT 20").fetchall()]
+                from . import codex as codex_mod
+                return self._json({"totali": totali, "per_giorno": per_giorno,
+                                   "per_progetto": per_progetto, "scambi": scambi,
+                                   "codex": codex_mod.stato()})
             if path == "/api/capabilities":
                 return self._json([dict(r) for r in conn.execute(
                     "SELECT * FROM capabilities ORDER BY kind, name").fetchall()])
@@ -331,6 +372,20 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/voice/stop" and method == "POST":
                 voice.ferma()
                 return self._json({"fermato": True})
+            if path == "/api/jarvis" and method == "POST":
+                testo = (body.get("testo") or "").strip()
+                if not testo:
+                    raise actions.BadInput("serve una frase")
+                lang = recap.lang_or_default(body.get("lang"))
+                esito = jarvis.esegui(testo, lang, conn)
+                esito["lingua"] = lang
+                esito["detto"] = testo
+                if not esito.get("muto") and body.get("voce", True) and esito.get("risposta"):
+                    info = voice.sintesi(esito["risposta"], lang)
+                    esito["url"] = "/audio/" + Path(info["file"]).name
+                    esito["file"] = info["file"]
+                    esito["motore"] = info["motore"]
+                return self._json(esito)
             if path == "/api/voice/ask" and method == "POST":
                 domanda = (body.get("domanda") or "").strip()
                 if not domanda:

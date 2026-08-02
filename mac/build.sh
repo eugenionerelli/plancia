@@ -36,7 +36,7 @@ xcrun swiftc \
   -O -whole-module-optimization \
   -target "$(uname -m)-apple-macosx13.0" \
   -o "$APP/Contents/MacOS/$NOME" \
-  "$ROOT/mac/Sources/main.swift"
+  "$ROOT/mac/Sources/main.swift" "$ROOT/mac/Sources/jarvis.swift"
 
 echo "· icona"
 ICONSET="$BUILD/Plancia.iconset"

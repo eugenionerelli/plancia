@@ -44,6 +44,7 @@ PROGETTI = [
      "Comparing three embedding models on a corpus of support tickets."),
 ]
 
+# (progetto, titolo, messaggi, tool, token, giorni fa, agente, scambi)
 SESSIONI = [
     ("lumen", "Incremental build for the search index", 34, 210, 41000, 0),
     ("lumen", "Fix the anchor links in generated headings", 9, 44, 8200, 1),
@@ -146,15 +147,25 @@ def main():
 
     for i, (key, titolo, n_user, n_tools, out, giorni) in enumerate(SESSIONI):
         inizio = quando(giorni, 9 + (i % 8))
+        # due agenti sullo stesso archivio: uno ogni tre è Codex
+        agente = "codex" if i % 3 == 1 else "claude"
+        scambi = 4 if (agente == "codex" and i % 6 == 1) else 0
         conn.execute(
             "INSERT INTO sessions(session_id, project_id, file, cwd, title, first_prompt, "
             "started_at, ended_at, n_user, n_assistant, n_tools, models, tools, "
-            "in_tokens, out_tokens, updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "in_tokens, out_tokens, agent, scambi, updated_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (f"demo-{i:03d}", ids[key], "", f"~/dev/{key}", titolo,
              titolo + ". Start from what is already there and do not rewrite the module.",
              inizio, inizio, n_user, n_user * 6, n_tools,
-             '["claude-opus-5"]', '{"Read": 40, "Edit": 12, "Bash": 9}',
-             out * 12, out, store.now()))
+             '["claude-opus-5"]' if agente == "claude" else '["gpt-5.4"]',
+             '{"Read": 40, "Edit": 12, "Bash": 9}',
+             out * 12, out, agente, scambi, store.now()))
+        if scambi:
+            store.add_event(conn, inizio, "scambio",
+                            f"Codex and Claude talked in {titolo}",
+                            f"{scambi} messages between agents", ids[key], f"demo-{i:03d}",
+                            "codex", dedup=f"x{i}")
         store.add_event(conn, inizio, "sessione", titolo, f"{n_user} messaggi · {n_tools} tool",
                         ids[key], f"demo-{i:03d}", "claude", dedup=f"s{i}")
         store.touch_project(conn, ids[key], inizio)

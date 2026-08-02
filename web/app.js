@@ -72,13 +72,28 @@ const EN = {
   'in elenco': 'listed', 'nessuna descrizione': 'no description',
   'adesso': 'just now', 'ieri': 'yesterday', 'mai': 'never',
   ' min fa': ' min ago', ' ore fa': ' hours ago', ' giorni fa': ' days ago',
-  ' mesi fa': ' months ago',
+  ' mesi fa': ' months ago', 'un mese fa': 'a month ago',
   'Cosa dovrei riprendere adesso?': 'What should I pick up now?',
   'pipeline': 'pipeline', 'sessione': 'session', 'hook': 'hook', 'memoria': 'note',
-  'task': 'task', 'post': 'post', 'nota': 'note', 'decisione': 'decision',
+  'task': 'task', 'post': 'post', 'nota': 'note', 'agente': 'agent',
+  'in ritardo': 'overdue', 'da': 'by', 'pubblicati': 'published',
+  'sessioni con scambi': 'sessions with handoffs', 'riprese': 'resumes',
+  'Codex e Claude si sono parlati': 'Codex and Claude talked', 'decisione': 'decision',
   'milestone': 'milestone', 'problema': 'problem', 'infra': 'infra',
   'ricerca': 'research', 'personale': 'personal', 'metodo': 'method',
   'sessione aperta': 'session opened', 'sessione chiusa': 'session closed',
+  'Agenti': 'Agents', 'scambio': 'handoff', 'scambi': 'handoffs',
+  'i due agenti sullo stesso archivio': 'both agents, one archive',
+  'sessioni tue': 'your turns', 'token generati': 'tokens out',
+  'chiamate a tool': 'tool calls', 'primo lavoro': 'first seen',
+  'ultimo lavoro': 'last seen', 'Chi ha lavorato su cosa': 'Who worked on what',
+  'Quando si sono parlati': 'When they talked to each other',
+  'nessuno scambio registrato': 'no handoff recorded',
+  'Codex non è collegato': 'Codex is not connected',
+  'tool condivisi': 'shared tools', 'oggi': 'today',
+  'sessioni oggi': 'sessions today', 'commit oggi': 'commits today',
+  'Ritmo · 30 giorni': 'Rhythm · 30 days',
+  'sopra la linea le sessioni, sotto i commit': 'sessions above the line, commits below',
 };
 
 // Gli eventi li scrive Plancia stessa, quindi si possono tradurre a vista.
@@ -127,7 +142,8 @@ function ago(ts) {
   const d = Math.floor(s / 86400);
   if (d === 1) return T('ieri');
   if (d < 30) return d + T(' giorni fa');
-  if (d < 365) return Math.floor(d / 30) + T(' mesi fa');
+  const m = Math.floor(d / 30);
+  if (d < 365) return m === 1 ? T('un mese fa') : m + T(' mesi fa');
   return t.toLocaleDateString(LOC());
 }
 const dateIt = (ts) => ts ? new Date(ts).toLocaleDateString(LOC(),
@@ -191,8 +207,10 @@ const views = {};
 views.oggi = async () => {
   const d = state.overview = await api('/api/overview');
   const s = d.stats;
-  const maxAct = Math.max(1, ...d.attivita.map((a) => a.sessioni + a.commit));
   const attivi = d.progetti.filter((p) => p.status === 'attivo');
+  const oggi = d.attivita[d.attivita.length - 1] || { claude: 0, codex: 0, commit: 0 };
+  const agenti = Object.fromEntries((d.agenti || []).map((a) => [a.agente, a]));
+  const coda = d.post.filter((p) => p.status !== 'pubblicato' && p.status !== 'scartato');
 
   return `
   <div class="view-head">
@@ -202,38 +220,29 @@ views.oggi = async () => {
     <p>${T('aggiornato ')}${ago(d.ultimo_sync)}</p>
   </div>
 
-  <div class="tiles">
-    ${tile(s.progetti_attivi, T('progetti attivi'))}
-    ${tile(s.task_aperti, T('task aperti'), s.task_scaduti ? 'alert' : '')}
-    ${tile(s.sessioni_settimana, T('sessioni 7 giorni'))}
-    ${tile(s.commit_mese, T('commit 30 giorni'))}
-    ${tile(s.post_in_coda, T('post in coda'))}
-    ${tile(s.post_pubblicati, T('post pubblicati'), s.post_pubblicati ? 'good' : '')}
-    ${tile(kilo(s.token_out_mese), T('token 30 giorni'))}
-    ${tile(s.memorie, T('memorie'))}
-  </div>
-
-  <div class="panel" style="margin-bottom:14px">
-    <header><h3>${T('Ritmo di lavoro · 30 giorni')}</h3><span class="spacer"></span>
-      <span class="chart-legend"><span><i style="background:var(--accent)"></i>${T('sessioni')}</span><span><i style="background:var(--info)"></i>${T('commit')}</span></span>
-    </header>
-    <div class="panel-body">
-      <div class="chart">
-        ${d.attivita.map((a) => {
-          const tot = a.sessioni + a.commit;
-          const h = tot ? Math.max(4, (tot / maxAct) * 70) : 2;
-          const hs = tot ? (a.sessioni / tot) * h : 0;
-          return `<div class="col ${tot ? '' : 'empty'}" title="${a.giorno}: ${a.sessioni} sessioni, ${a.commit} commit">
-            ${a.commit ? `<div class="bar c" style="height:${h - hs}px"></div>` : ''}
-            ${a.sessioni ? `<div class="bar" style="height:${hs}px"></div>` : (tot ? '' : '<div class="bar"></div>')}
-          </div>`;
-        }).join('')}
-      </div>
+  <div class="bento" data-in="1">
+    <div class="cell tall wide" style="justify-content:flex-start">
+      <div class="k">${T('Ritmo · 30 giorni')}</div>
+      ${nastro(d.attivita)}
     </div>
+    ${cella(oggi.claude + oggi.codex, T('sessioni oggi'), '', oggi.commit ? `${oggi.commit} ${T('commit oggi')}` : '')}
+    ${cella(s.task_aperti, T('task aperti'), s.task_scaduti ? 'alarm' : '',
+       s.task_scaduti ? `${s.task_scaduti} ${T('in ritardo')}` : '')}
+    ${cella(s.progetti_attivi, T('progetti attivi'))}
+    ${cella(kilo(s.token_out_mese), T('token 30 giorni'), 'quiet')}
   </div>
 
-  <div class="grid cols-2">
-    <div style="display:flex;flex-direction:column;gap:14px">
+  <div class="bento" data-in="2" style="grid-template-columns:repeat(4,1fr)">
+    ${agenteCella('claude', agenti.claude)}
+    ${agenteCella('codex', agenti.codex)}
+    ${cella(s.scambi || 0, T('sessioni con scambi'), s.scambi ? 'nominal' : 'quiet',
+       s.scambi ? T('Codex e Claude si sono parlati') : '')}
+    ${cella(s.post_in_coda, T('post in coda'), 'quiet',
+       s.post_pubblicati ? `${s.post_pubblicati} ${T('pubblicati')}` : '')}
+  </div>
+
+  <div class="grid cols-2" data-in="3">
+    <div style="display:flex;flex-direction:column;gap:var(--s3)">
       <div class="panel">
         <header><h3>${T('Task aperti')}</h3><span class="spacer"></span>
           <a class="mini" href="#/task">${T('tutti')}</a></header>
@@ -244,21 +253,22 @@ views.oggi = async () => {
             ${d.progetti.map((p) => `<option value="${esc(p.key)}">${esc(p.name)}</option>`).join('')}
           </select>
         </form>
-        <div class="panel-body tight">${taskRows(d.task.slice(0, 9))}</div>
+        <div class="panel-body tight">${taskRows(d.task.slice(0, 8))}</div>
       </div>
 
       <div class="panel">
-        <header><h3>${T('Progetti attivi')}</h3><span class="spacer"></span><a class="mini" href="#/progetti">${T('tutti')}</a></header>
+        <header><h3>${T('Progetti attivi')}</h3><span class="spacer"></span>
+          <a class="mini" href="#/progetti">${T('tutti')}</a></header>
         <div class="panel-body tight">
           ${attivi.slice(0, 7).map((p) => `
             <div class="row" data-project="${esc(p.key)}" style="cursor:pointer">
               <div class="prio p${p.priority}"></div>
               <div class="main">
                 <div class="title">${esc(p.name)}</div>
-                <div class="sub truncate">${esc(p.next_action || p.summary || '—')}</div>
+                <div class="sub truncate">${esc(p.next_action || p.summary) || '—'}</div>
               </div>
               <div class="side">
-                ${p.task_aperti ? `<span class="tag">${p.task_aperti} task</span>` : ''}
+                ${p.task_aperti ? `<span class="tag">${p.task_aperti}</span>` : ''}
                 <span class="tag mono">${ago(p.last_activity)}</span>
               </div>
             </div>`).join('') || `<div class="empty">${T('nessun progetto attivo')}</div>`}
@@ -266,28 +276,78 @@ views.oggi = async () => {
       </div>
     </div>
 
-    <div style="display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;flex-direction:column;gap:var(--s3)">
       <div class="panel">
-        <header><h3>${T('Attività recente')}</h3><span class="spacer"></span><a class="mini" href="#/sessioni">${T('sessioni')}</a></header>
-        <div class="panel-body"><div class="tl">${timeline(d.eventi.slice(0, 22))}</div></div>
+        <header><h3>${T('Attività recente')}</h3><span class="spacer"></span>
+          <a class="mini" href="#/sessioni">${T('sessioni')}</a></header>
+        <div class="panel-body"><div class="tl">${timeline(d.eventi.slice(0, 20))}</div></div>
       </div>
-      ${d.post.filter((p) => p.status !== 'pubblicato' && p.status !== 'scartato').length ? `
+      ${coda.length ? `
       <div class="panel">
-        <header><h3>${T('Social in coda')}</h3><span class="spacer"></span><a class="mini" href="#/social">${T('pipeline')}</a></header>
+        <header><h3>${T('Social in coda')}</h3><span class="spacer"></span>
+          <a class="mini" href="#/social">${T('pipeline')}</a></header>
         <div class="panel-body tight">
-          ${d.post.filter((p) => p.status !== 'pubblicato' && p.status !== 'scartato').slice(0, 5).map((p) => `
+          ${coda.slice(0, 4).map((p) => `
             <div class="row"><div class="main">
               <div class="title clamp2">${esc(p.text)}</div>
-              <div class="sub">${esc(p.platform)} · ${esc(p.project || 'senza progetto')}</div>
-            </div><div class="side"><span class="tag ${statusClass[p.status] || ''}">${esc(p.status)}</span></div></div>`).join('')}
+              <div class="sub">${esc(p.platform)} · ${esc(p.project) || T('nessun progetto')}</div>
+            </div><div class="side"><span class="tag ${statusClass[p.status] || ''}">${T(p.status)}</span></div></div>`).join('')}
         </div>
       </div>` : ''}
     </div>
   </div>`;
 };
 
-const tile = (v, label, cls = '') =>
-  `<div class="tile ${cls}"><b class="num">${typeof v === 'number' ? num(v) : v}</b><span>${label}</span></div>`;
+const cella = (v, etichetta, cls = '', nota = '') => `
+  <div class="cell ${cls}">
+    <div class="k">${etichetta}</div>
+    <div class="v">${typeof v === 'number' ? num(v) : v}</div>
+    ${nota ? `<div class="n">${nota}</div>` : ''}
+  </div>`;
+
+const agenteCella = (nome, a) => {
+  const colore = nome === 'codex' ? 'var(--codex)' : 'var(--claude)';
+  if (!a) return `<div class="cell quiet"><div class="k">${nome}</div>
+    <div class="v" style="font-size:15px">${T('Codex non è collegato')}</div></div>`;
+  return `
+  <div class="cell" style="cursor:pointer" data-goto="agenti">
+    <div class="k"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${colore};margin-right:6px;vertical-align:1px"></span>${nome}</div>
+    <div class="v">${num(a.sessioni)}<small>${T('sessioni')}</small></div>
+    <div class="n">${kilo(a.token)} ${T('token generati')} · ${num(a.tool)} tool</div>
+  </div>`;
+};
+
+/* Il nastro: una linea d'orizzonte, le sessioni sopra e i commit sotto.
+   Si legge di sbieco, che è il punto di uno strumento. */
+function nastro(giorni) {
+  const maxSu = Math.max(1, ...giorni.map((g) => (g.claude || 0) + (g.codex || 0)));
+  const maxGiu = Math.max(1, ...giorni.map((g) => g.commit || 0));
+  const H = 42;
+  const totC = giorni.reduce((a, g) => a + (g.claude || 0), 0);
+  const totX = giorni.reduce((a, g) => a + (g.codex || 0), 0);
+  const totK = giorni.reduce((a, g) => a + (g.commit || 0), 0);
+  return `
+  <div class="ribbon">
+    ${giorni.map((g, i) => {
+      const c = g.claude || 0, x = g.codex || 0, k = g.commit || 0;
+      const su = ((c + x) / maxSu) * H, giu = (k / maxGiu) * H;
+      const hc = (c + x) ? (c / (c + x)) * su : 0;
+      const ultimo = i === giorni.length - 1;
+      return `<div class="day ${ultimo ? 'oggi' : ''}" title="${g.giorno} · ${c} claude, ${x} codex, ${k} commit">
+        ${x ? `<div class="up codex" style="height:${su}px"></div>` : ''}
+        ${c ? `<div class="up" style="height:${hc}px"></div>` : ''}
+        ${k ? `<div class="down" style="height:${giu}px"></div>` : ''}
+        ${(!c && !x && !k) ? '<div class="tick"></div>' : ''}
+      </div>`;
+    }).join('')}
+  </div>
+  <div class="ribbon-legend">
+    <span><i style="background:var(--claude)"></i>claude ${totC}</span>
+    <span><i style="background:var(--codex)"></i>codex ${totX}</span>
+    <span><i style="background:var(--text-3);opacity:.6"></i>commit ${totK}</span>
+    <span class="spacer">${T('sopra la linea le sessioni, sotto i commit')}</span>
+  </div>`;
+}
 
 function timeline(events) {
   if (!events.length) return `<div class="empty">${T('niente da mostrare')}</div>`;
@@ -306,7 +366,7 @@ function taskRows(tasks) {
       <div class="main">
         <div class="title">${esc(t.title)}</div>
         <div class="sub">${[t.project && esc(t.project), t.due && 'scade ' + t.due,
-          t.source !== 'manuale' ? 'da ' + esc(t.source) : ''].filter(Boolean).join(' · ') || '—'}</div>
+          t.source !== 'manuale' ? T('da') + ' ' + esc(t.source) : ''].filter(Boolean).join(' · ') || '—'}</div>
       </div>
       <div class="side">
         ${t.status !== 'aperto' ? `<span class="tag ${statusClass[t.status] || ''}">${T(t.status)}</span>` : ''}
@@ -439,6 +499,117 @@ async function chiedi(domanda) {
 }
 
 
+
+/* ---------------------------------------------------------------- agenti */
+/* Un thread ripreso più volte produce un file per ripresa: nell'elenco è una
+   riga sola, con quante volte ci sono tornati sopra. */
+function raggruppa(scambi) {
+  const per = new Map();
+  scambi.forEach((e) => {
+    const k = e.title || '?';
+    if (!per.has(k)) per.set(k, { ...e, n: 0 });
+    const v = per.get(k);
+    v.n += 1;
+    if (e.ts > v.ts) v.ts = e.ts;
+  });
+  return [...per.values()].sort((a, b) => (a.ts < b.ts ? 1 : -1));
+}
+
+views.agenti = async () => {
+  const d = await api('/api/agents');
+  const per = Object.fromEntries(d.totali.map((a) => [a.agente, a]));
+  const scheda = (nome) => {
+    const a = per[nome];
+    if (!a) return `<div class="agent-card ${nome}">
+      <h3>${nome}</h3><div class="big" style="font-size:18px">${T('Codex non è collegato')}</div></div>`;
+    return `
+    <div class="agent-card ${nome}">
+      <h3>${nome}</h3>
+      <div class="big">${num(a.sessioni)}</div>
+      <div style="font-size:11.5px;color:var(--faint)">${T('sessioni')} · ${T('primo lavoro')} ${ago(a.primo)}</div>
+      <div class="agent-stats">
+        <div><b>${kilo(a.token)}</b><span>${T('token generati')}</span></div>
+        <div><b>${num(a.tool)}</b><span>${T('chiamate a tool')}</span></div>
+        <div><b>${num(a.messaggi)}</b><span>${T('sessioni tue')}</span></div>
+      </div>
+    </div>`;
+  };
+
+  const maxG = Math.max(1, ...d.per_giorno.map((g) => g.n));
+  const giorni = {};
+  d.per_giorno.forEach((g) => {
+    giorni[g.giorno] = giorni[g.giorno] || { claude: 0, codex: 0 };
+    giorni[g.giorno][g.agente] = g.n;
+  });
+  const elenco = Object.entries(giorni).sort().slice(-30);
+
+  return `
+  <div class="view-head">
+    <h1>${T('Agenti')}</h1><p>${T('i due agenti sullo stesso archivio')}</p>
+    <span class="spacer"></span>
+    <span class="tag ${d.codex.mcp ? 'ok' : 'warn'}">${d.codex.mcp ? '16 ' + T('tool condivisi') : 'MCP ' + T('Codex non è collegato')}</span>
+  </div>
+
+  <div class="duel" data-in="1">${scheda('claude')}${scheda('codex')}</div>
+
+  <div class="grid cols-2" data-in="2" style="margin-top:var(--s3)">
+    <div class="panel">
+      <header><h3>${T('Chi ha lavorato su cosa')}</h3></header>
+      <div class="panel-body">
+        ${d.per_progetto.map((p) => {
+          const tot = p.claude + p.codex;
+          return `<div style="margin-bottom:var(--s4)">
+            <div style="display:flex;gap:8px;align-items:baseline;margin-bottom:6px">
+              <span style="font-size:13px" data-project="${esc(p.chiave)}" role="button">${esc(p.progetto)}</span>
+              <span class="spacer" style="margin-left:auto"></span>
+              <span class="mono" style="font-size:10.5px;color:var(--faint)">${p.claude} · ${p.codex}</span>
+            </div>
+            <div class="split">
+              <i class="c" style="width:${(p.claude / tot) * 100}%"></i>
+              <i class="x" style="width:${(p.codex / tot) * 100}%"></i>
+            </div>
+          </div>`;
+        }).join('') || `<div class="empty">${T('niente da mostrare')}</div>`}
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:var(--s3)">
+      <div class="panel">
+        <header><h3>${T('Ritmo · 30 giorni')}</h3></header>
+        <div class="panel-body">
+          <div class="ribbon" style="height:74px">
+            ${elenco.map(([g, v]) => {
+              const su = ((v.claude || 0) / maxG) * 32;
+              const giu = ((v.codex || 0) / maxG) * 32;
+              return `<div class="day" title="${g}: ${v.claude || 0} claude, ${v.codex || 0} codex">
+                ${v.claude ? `<div class="up" style="height:${su}px"></div>` : ''}
+                ${v.codex ? `<div class="down" style="height:${giu}px;background:var(--codex);opacity:.85"></div>` : ''}
+                ${(!v.claude && !v.codex) ? '<div class="tick"></div>' : ''}
+              </div>`;
+            }).join('')}
+          </div>
+          <div class="ribbon-legend">
+            <span><i style="background:var(--claude)"></i>claude</span>
+            <span><i style="background:var(--codex)"></i>codex</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <header><h3>${T('Quando si sono parlati')}</h3><span class="spacer"></span>
+          <span class="tag mono">${d.scambi.length}</span></header>
+        <div class="panel-body tight">
+          ${raggruppa(d.scambi).slice(0, 8).map((e) => `
+            <div class="row"><div class="main">
+              <div class="title truncate">${esc(e.title)}</div>
+              <div class="sub">${ago(e.ts)} · ${e.n > 1 ? e.n + ' ' + T('riprese') + ' · ' : ''}${esc(e.detail || '')}${e.progetto ? ' · ' + esc(e.progetto) : ''}</div>
+            </div></div>`).join('') || `<div class="empty">${T('nessuno scambio registrato')}</div>`}
+        </div>
+      </div>
+    </div>
+  </div>`;
+};
+
 views.progetti = async () => {
   const list = state.overview ? state.overview.progetti : (await api('/api/overview')).progetti;
   const groups = [['attivo', T('attivo')], ['idea', T('idea')], ['in pausa', T('in pausa')], ['concluso', T('concluso')]];
@@ -551,22 +722,24 @@ views.social = async () => {
 };
 
 views.sessioni = async () => {
-  const f = state.filters.sessioni || (state.filters.sessioni = { q: '', project: '' });
+  const f = state.filters.sessioni || (state.filters.sessioni = { q: '', project: '', agent: '' });
   const [rows, projects] = await Promise.all([
-    api(`/api/sessions?limit=150${f.q ? '&q=' + encodeURIComponent(f.q) : ''}${f.project ? '&project=' + encodeURIComponent(f.project) : ''}`),
+    api(`/api/sessions?limit=150${f.q ? '&q=' + encodeURIComponent(f.q) : ''}${f.project ? '&project=' + encodeURIComponent(f.project) : ''}${f.agent ? '&agent=' + f.agent : ''}`),
     api('/api/projects'),
   ]);
   return `
   <div class="view-head"><h1>${T('Sessioni')}</h1><p>${rows.length} ${T('conversazioni con Claude Code')}</p></div>
   <div class="filters">
     <input type="search" data-filter-input="sessioni.q" value="${esc(f.q)}" placeholder="${T('cerca nel primo messaggio…')}" style="min-width:280px">
+    ${['', 'claude', 'codex'].map((a) =>
+      `<span class="chip ${f.agent === a ? 'on' : ''}" data-filter="sessioni.agent" data-value="${a}">${a || T('tutti')}</span>`).join('')}
     <select data-filter-select="sessioni.project">
       <option value="">${T('tutti i progetti')}</option>
       ${projects.map((p) => `<option value="${esc(p.key)}" ${f.project === p.key ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}
     </select>
   </div>
   <div class="panel"><table>
-    <thead><tr><th>${T('quando')}</th><th>${T('di cosa')}</th><th>${T('progetto')}</th><th style="text-align:right">${T('scambi')}</th><th style="text-align:right">${T('tool')}</th><th></th></tr></thead>
+    <thead><tr><th>${T('quando')}</th><th>${T('di cosa')}</th><th>${T('agente')}</th><th>${T('progetto')}</th><th style="text-align:right">${T('scambi')}</th><th style="text-align:right">${T('tool')}</th><th></th></tr></thead>
     <tbody>${rows.map((s) => `
       <tr>
         <td class="num" style="white-space:nowrap;color:var(--faint)">${dateIt(s.started_at)}<br><small>${ago(s.started_at)}</small></td>
@@ -574,13 +747,14 @@ views.sessioni = async () => {
           <div>${esc(s.title || (s.prompt || s.first_prompt || '').slice(0, 90)) || T('senza titolo')}</div>
           <div class="sub clamp2" style="color:var(--faint);font-size:11.5px">${esc((s.first_prompt || '').slice(0, 190))}</div>
         </div></td>
+        <td><span class="tag agente ${s.agent === 'codex' ? 'codex' : ''}">${esc(s.agent || 'claude')}</span></td>
         <td>${s.progetto ? `<span class="tag">${esc(s.progetto)}</span>` : '<span style="color:var(--faint)">—</span>'}</td>
         <td class="num" style="text-align:right">${num(s.n_user)}</td>
         <td class="num" style="text-align:right">${num(s.n_tools)}</td>
         <td style="text-align:right;white-space:nowrap">
           <button class="mini" data-act="copy-resume" data-id="${esc(s.session_id)}" data-cwd="${esc(s.cwd || '')}">${T('riprendi')}</button>
         </td>
-      </tr>`).join('') || `<tr><td colspan="6" class="empty">${T('nessuna sessione')}</td></tr>`}
+      </tr>`).join('') || `<tr><td colspan="7" class="empty">${T('nessuna sessione')}</td></tr>`}
     </tbody>
   </table></div>`;
 };
@@ -786,6 +960,9 @@ document.addEventListener('click', async (ev) => {
   }
   if (mem && mem.dataset.memory) { ev.preventDefault(); openMemory(mem.dataset.memory); return; }
   if (proj && proj.dataset.project) { ev.preventDefault(); openProject(proj.dataset.project); return; }
+
+  const vai = ev.target.closest('[data-goto]');
+  if (vai) { location.hash = '#/' + vai.dataset.goto; return; }
 
   const chip = ev.target.closest('[data-filter]');
   if (chip) {
