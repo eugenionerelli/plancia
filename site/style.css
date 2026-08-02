@@ -272,5 +272,22 @@ html[lang="it"] [data-lingua="en"] { display: none !important; }
   .prove div:nth-child(3) { border-left: 0; padding-left: 0; }
   .prezzi { grid-template-columns: 1fr; }
   .apertura { padding-top: var(--s8); }
+  .apertura h1 { max-width: none; }
   nav.menu a.solo-largo { display: none; }
+}
+
+/* Il telefono. La barra deve stare in una riga sola senza spingere fuori la
+ * pagina: prima si stringono gli spazi, poi si toglie il nome accanto al
+ * marchio, mai il selettore della lingua. */
+@media (max-width: 560px) {
+  header.barra .wrap { gap: var(--s3); }
+  nav.menu { gap: var(--s3); }
+  nav.menu a { font-size: 13px; }
+  .prove { grid-template-columns: 1fr 1fr; }
+  .prezzo { padding: var(--s5); }
+  section { padding: var(--s8) 0; }
+}
+
+@media (max-width: 380px) {
+  .marchio .nome { display: none; }
 }

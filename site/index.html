@@ -331,8 +331,8 @@
           <li data-lingua="it">Tutte le funzioni, senza scadenza</li>
           <li data-lingua="en">You compile the Mac app yourself with <code>mac/build.sh</code></li>
           <li data-lingua="it">L'app Mac te la compili con <code>mac/build.sh</code></li>
-          <li data-lingua="en">macOS will ask you to allow it the first time</li>
-          <li data-lingua="it">macOS ti chiederà di autorizzarla la prima volta</li>
+          <li data-lingua="en">macOS asks you to allow it once, in System Settings</li>
+          <li data-lingua="it">macOS te la fa autorizzare una volta, da Impostazioni di Sistema</li>
         </ul>
         <a class="btn" href="https://github.com/eugenionerelli/plancia#install">
           <span data-lingua="en">Read the install steps</span>
@@ -349,12 +349,14 @@
         <ul>
           <li data-lingua="en">Opens with a double click, signed and notarised by Apple</li>
           <li data-lingua="it">Si apre con un doppio clic, firmata e notarizzata da Apple</li>
+          <li data-lingua="en">No licence key, no activation: the GPL forbids both</li>
+          <li data-lingua="it">Nessuna chiave, nessuna attivazione: la GPL le vieta</li>
           <li data-lingua="en">Updates in place, for this major version</li>
           <li data-lingua="it">Si aggiorna da sola, per questa versione maggiore</li>
           <li data-lingua="en">It pays for the certificate, and for the next feature</li>
           <li data-lingua="it">Paga il certificato, e la prossima funzione</li>
         </ul>
-        <a class="btn primo" href="PAGAMENTO" data-pagamento>
+        <a class="btn primo" href="https://github.com/eugenionerelli/plancia/releases" data-pagamento>
           <span data-lingua="en">Get the signed build</span>
           <span data-lingua="it">Prendi la build firmata</span>
         </a>
@@ -450,6 +452,23 @@
 </footer>
 
 <script>
+// Il link di pagamento. Finché è vuoto il bottone porta alle release e dice che
+// la build firmata sta arrivando: meglio una pagina onesta di un link morto.
+const PAGAMENTO = "";
+
+(function () {
+  const bottone = document.querySelector('[data-pagamento]');
+  if (PAGAMENTO) {
+    bottone.href = PAGAMENTO;
+  } else {
+    bottone.parentElement.querySelectorAll('.cifra, .nota').forEach(function (n) {
+      n.style.opacity = '.45';
+    });
+    bottone.innerHTML = '<span data-lingua="en">Not on sale yet, watch the repo</span>'
+                      + '<span data-lingua="it">Non è ancora in vendita, segui il repo</span>';
+  }
+})();
+
 // La lingua: quella salvata, se no quella del browser, se no inglese.
 (function () {
   var salvata = null;
