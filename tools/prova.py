@@ -368,14 +368,24 @@ def main():
 
     # ------------------------------------------------------------------ voce
     from plancia import voice as _v  # noqa: E402
-    _v._ultimo_no = 0.0
-    _v.voicebox_vivo()
     import time as _t2
+    _v._ultimo_no = 0.0
     _t0 = _t2.perf_counter()
-    _v.voicebox_vivo()
-    secondo = (_t2.perf_counter() - _t0) * 1000
+    _v.voicebox_vivo()                 # questa bussa davvero
+    primo = (_t2.perf_counter() - _t0) * 1000
+    # La chiamata a memoria si misura tre volte e si tiene la piu' veloce: una
+    # soglia secca in millisecondi faceva fallire il collaudo quando la macchina
+    # era sotto carico, e un collaudo che fallisce a caso smette di dire
+    # qualcosa. Il confronto e' anche relativo al primo giro, che sotto carico
+    # rallenta insieme al secondo.
+    tempi = []
+    for _ in range(3):
+        _t0 = _t2.perf_counter()
+        _v.voicebox_vivo()
+        tempi.append((_t2.perf_counter() - _t0) * 1000)
+    secondo = min(tempi)
     prova("un Voicebox che non risponde non si richiede a ogni frase",
-          secondo < 5, f"{secondo:.0f} ms")
+          secondo < 5 or secondo < primo / 2, f"{primo:.1f} ms poi {secondo:.1f} ms")
     _v._ultimo_no = 0.0
 
     prova("il testo per la voce passa dalla sintesi",

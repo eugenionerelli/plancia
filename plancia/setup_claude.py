@@ -395,7 +395,7 @@ def install_command() -> str:
     link.symlink_to(src)
     on_path = str(target) in os.environ.get("PATH", "").split(":")
     return (f"comando `plancia` in {link}" if on_path
-            else f"comando in {link} — aggiungi {target} al PATH")
+            else f"comando in {link}, aggiungi {target} al PATH")
 
 
 # --------------------------------------------------------------------------

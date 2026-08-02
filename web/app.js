@@ -1,4 +1,4 @@
-/* Plancia — interfaccia. Nessun framework: fetch, template literal, delega eventi. */
+/* Plancia, interfaccia. Nessun framework: fetch, template literal, delega eventi. */
 
 const TOKEN = document.querySelector('meta[name=plancia-token]').content;
 const $ = (s, r = document) => r.querySelector(s);
