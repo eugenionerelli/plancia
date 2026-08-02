@@ -489,6 +489,29 @@ def doctor() -> list:
                 n = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
                 lines.append(f"    {table}: {n}")
             lines.append(f"    ultimo sync: {store.get_meta(conn, 'last_sync_end', 'mai')}")
+
+            # La lavagna: quante voci per fonte, e se una fonte è muta si vede
+            # subito invece di scoprirlo dal fatto che manca roba.
+            from . import lavagna as _lav
+            per_fonte = _lav.conteggi(conn)
+            pezzi = ", ".join(f"{k} {v.get('aperti', 0)}" for k, v in sorted(per_fonte.items()))
+            lines.append(f"{ok(any(v.get('aperti') for v in per_fonte.values()))}"
+                         f"lavagna: {pezzi or 'vuota'}")
+            esiti = {"claude": {"ok": True}, "codex": {"ok": True}}
+            _lav.da_claude(esiti["claude"])
+            _lav.da_codex(esiti["codex"])
+            for fonte, e in esiti.items():
+                if not e.get("ok", True):
+                    lines.append(f"no  la lavagna non riesce a leggere {fonte}")
+
+            # Lanci appesi: se ce ne sono, la lavagna sta raccontando un lavoro
+            # che non sta lavorando.
+            from . import cantiere as _cant
+            appesi = [r for r in conn.execute(
+                "SELECT id, pid FROM runs WHERE stato IN ('in coda','in corso')")
+                if not _cant._vivo(r["pid"])]
+            lines.append(f"{ok(not appesi)}lanci appesi: {len(appesi)}"
+                         + ("  (si chiudono al prossimo giro freddo)" if appesi else ""))
         except Exception as exc:
             lines.append(f"    errore: {exc}")
         finally:
@@ -511,6 +534,13 @@ def doctor() -> list:
                      f"{'Voicebox attivo' if v['voicebox_vivo'] else 'voci di sistema'}")
     except Exception as exc:
         lines.append(f"no  voce: {exc}")
+    try:
+        from . import eventi as _ev
+        st = _ev.stato()
+        lines.append(f"{ok(st['eventi'] >= 0)}registro eventi: {st['eventi']} righe, "
+                     f"{round(st['byte'] / 1024)} KB, schema {st['schema']}")
+    except Exception as exc:
+        lines.append(f"no  registro eventi: {exc}")
     from . import recap as _recap
     lines.append(f"{ok(bool(_recap.claude_bin()))}claude per il riepilogo: {_recap.claude_bin() or 'non trovato'}")
     app = Path("/Applications/Plancia.app")
