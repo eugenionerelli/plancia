@@ -105,6 +105,19 @@ Quello che è cambiato sotto:
   non c'è, e serve quando una frase viene capita male: la correggi scrivendo
   invece di ripeterla tutta, che è il momento in cui di solito si molla.
 
+### Le domande che non passano da un modello
+
+Tre nuove famiglie di domande rispondono in meno di un millesimo di secondo,
+leggendo il database e basta: **cosa c'è aperto sulla lavagna**, **come sono
+andati i lanci**, **quanto ho speso oggi**. Prima costavano quasi tre secondi
+ciascuna, ed è il tipo di cosa che si chiede dieci volte al giorno.
+
+Insieme a quelle che c'erano già (quanti task, da dove riparto, cosa ho fatto
+oggi e ieri, quanto ho lavorato questa settimana, come va con Codex, quanti
+progetti, quanti post) sono le domande che a voce si fanno davvero. Funzionano in
+italiano, inglese e spagnolo, e se la domanda non combacia con certezza si torna
+al modello: meglio lento che sbagliato.
+
 ### La prima volta
 
 macOS chiede microfono e dettatura. Se la finestra non compare, usa **"Attiva la

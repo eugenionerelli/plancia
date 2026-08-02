@@ -181,7 +181,7 @@ tre strade, in quest'ordine:
 
 | strada | quando | costo |
 |---|---|---|
-| comandi | apri una vista, segna un task, chiudilo, archivia un progetto | 0,1 s |
+| comandi | apri una vista, segna un task, chiudilo, annulla un lancio, archivia | 0,1 s |
 | risposte dai dati | quanti task, cosa riprendo, quanto ho lavorato | 0,1 s |
 | Claude, tenuto caldo | tutto il resto, con i tool `plancia_*` aperti | 2,7 s |
 

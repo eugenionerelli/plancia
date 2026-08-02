@@ -115,6 +115,27 @@ def main():
           recap.solo_cache(conn, "it").get("testo") is None,
           "la cache tiene una lingua sola")
 
+    # --------------------------------------------------- risposte senza modello
+    from plancia import risposte  # noqa: E402
+    domande = {
+        "it": ["quanti task aperti ho", "cosa c'è aperto sulla lavagna",
+               "come sono andati i lanci", "quanto ho speso oggi",
+               "cosa ho fatto oggi", "come va con codex"],
+        "en": ["how many open tasks do i have", "what is open on the board",
+               "how did the runs go", "how much did i spend today",
+               "what did i do today", "how is codex doing"],
+        "es": ["cuántas tareas abiertas tengo", "qué hay abierto en la pizarra",
+               "cómo han ido los lanzamientos", "cuánto he gastado hoy"],
+    }
+    for lingua, elenco_domande in domande.items():
+        mancanti = [d for d in elenco_domande if not risposte.prova(conn, d, lingua)]
+        prova(f"le domande sui dati rispondono in {lingua} senza modello",
+              not mancanti, str(mancanti))
+
+    # una domanda che i dati non sanno deve passare al modello, non inventare
+    prova("una domanda che i dati non sanno passa oltre",
+          risposte.prova(conn, "scrivimi una poesia sul mare", "it") is None)
+
     # ------------------------------------------------------ commit e sessioni
     from plancia import ingest  # noqa: E402
     n = ingest.attribuisci_commit(conn)

@@ -205,6 +205,91 @@ def _post(conn, lang, t):
             "es": f"{coda} posts en cola y {pub} publicados."}.get(lang)
 
 
+def _lavagna(conn, lang, t):
+    """Cosa c'è aperto adesso, di tutti e tre. È la domanda che si fa più
+    spesso a voce, e prima costava tre secondi di modello."""
+    from . import lavagna as _lav
+    c = _lav.conteggi(conn)
+    aperti = {k: v.get("aperti", 0) for k, v in c.items()}
+    tot = sum(aperti.values())
+    if not tot:
+        return {"it": "Non c'è niente di aperto.", "en": "Nothing is open.",
+                "es": "No hay nada abierto."}.get(lang)
+    bloccati = sum(v.get("bloccato", 0) for v in c.values())
+    pezzi = {
+        "it": f"{tot} voci aperte: {aperti.get('claude', 0)} di Claude, "
+              f"{aperti.get('codex', 0)} di Codex, {aperti.get('plancia', 0)} tue.",
+        "en": f"{tot} open items: {aperti.get('claude', 0)} from Claude, "
+              f"{aperti.get('codex', 0)} from Codex, {aperti.get('plancia', 0)} yours.",
+        "es": f"{tot} abiertos: {aperti.get('claude', 0)} de Claude, "
+              f"{aperti.get('codex', 0)} de Codex, {aperti.get('plancia', 0)} tuyos.",
+    }.get(lang)
+    if bloccati:
+        uno = bloccati == 1
+        pezzi += {"it": " Di questi uno è bloccato." if uno else f" Di questi {bloccati} sono bloccati.",
+                  "en": " One of them is blocked." if uno else f" {bloccati} of them are blocked.",
+                  "es": " Uno está bloqueado." if uno else f" {bloccati} están bloqueados."}.get(lang, "")
+    return pezzi
+
+
+def _lanci(conn, lang, t):
+    """Com'è andata ai lavori mandati agli agenti."""
+    righe = conn.execute(
+        "SELECT stato, COUNT(*) n FROM runs WHERE inizio > ? GROUP BY stato",
+        (_inizio_giorno(7),)).fetchall()
+    per = {r["stato"]: r["n"] for r in righe}
+    if not per:
+        return {"it": "Non hai mandato niente a nessun agente questa settimana.",
+                "en": "You have not dispatched anything this week.",
+                "es": "No has mandado nada a ningún agente esta semana."}.get(lang)
+    attivi = per.get("in corso", 0) + per.get("in coda", 0)
+    tot, bene, male = sum(per.values()), per.get("riuscito", 0), per.get("fallito", 0)
+    frase = {
+        "it": f"Questa settimana {'un lancio' if tot == 1 else str(tot) + ' lanci'}: "
+              f"{'uno andato bene' if bene == 1 else str(bene) + ' andati bene'}, "
+              f"{'uno male' if male == 1 else ('nessuno male' if male == 0 else str(male) + ' male')}.",
+        "en": f"This week, {tot} run{'' if tot == 1 else 's'}: {bene} went well, {male} failed.",
+        "es": f"Esta semana, {tot} lanzamiento{'' if tot == 1 else 's'}: {bene} bien, {male} mal.",
+    }.get(lang)
+    if attivi:
+        uno = attivi == 1
+        frase += {"it": " E uno è ancora in corso." if uno else f" E {attivi} sono ancora in corso.",
+                  "en": " And one is still running." if uno else f" And {attivi} are still running.",
+                  "es": " Y uno sigue en marcha." if uno else f" Y {attivi} siguen en marcha."}.get(lang, "")
+    return frase
+
+
+def _spesa(conn, lang, t):
+    """Quanto stai bruciando oggi rispetto al solito. La domanda che conta non
+    è quanti token, è se oggi sei fuori scala."""
+    from . import proposte as _p
+    oggi = conn.execute(
+        f"SELECT COALESCE(SUM(out_tokens),0) FROM sessions s "
+        f"WHERE started_at >= ? AND {store.visibile()}", (_inizio_giorno(),)).fetchone()[0]
+    fuga = _p._fuga(conn)
+    # Detto a voce, "milleottocentosette mila" non si capisce: sopra il milione
+    # si dice in milioni, con una cifra dopo la virgola.
+    if oggi >= 1_000_000:
+        quanti = {"it": f"{round(oggi / 1e6, 1)}".replace(".", ",") + " milioni di token",
+                  "en": f"{round(oggi / 1e6, 1)} million tokens",
+                  "es": f"{round(oggi / 1e6, 1)}".replace(".", ",") + " millones de tokens"}[lang]
+    else:
+        quanti = {"it": f"{round(oggi / 1000)} mila token",
+                  "en": f"{round(oggi / 1000)} thousand tokens",
+                  "es": f"{round(oggi / 1000)} mil tokens"}[lang]
+    frase = {"it": f"Oggi hai generato {quanti}.",
+             "en": f"Today you generated {quanti}.",
+             "es": f"Hoy has generado {quanti}."}.get(lang)
+    if fuga:
+        frase += {"it": f" Sono {str(fuga).replace('.', ',')} volte la tua media: tienila d'occhio.",
+                  "en": f" That is {fuga} times your average: worth watching.",
+                  "es": f" Son {str(fuga).replace('.', ',')} veces tu media: ojo."}.get(lang, "")
+    else:
+        frase += {"it": " Sei nella norma.", "en": " You are in the normal range.",
+                  "es": " Estás en lo normal."}.get(lang, "")
+    return frase
+
+
 REGOLE = [
     # (gruppi di sinonimi, funzione)
     ([("task", "tarea", "tareas", "cose"), ("quanti", "quante", "how many", "cuántas", "cuantas",
@@ -214,6 +299,10 @@ REGOLE = [
      _da_dove_riparto),
     ([("fermo", "fermi", "ferme", "idle", "stalled", "parado", "parados", "abbandonato"),
       ("cosa", "che", "what", "qué", "su", "quale")], _fermi),
+    ([("token", "spesa", "speso", "spend", "spent", "burn", "burning", "consumo", "quota",
+       "budget", "gastado", "gastando", "bruciato", "bruciando"),
+      ("quanto", "oggi", "how", "much", "today", "cuánto", "cuanto", "hoy", "sto", "sono", "i")],
+     _spesa),
     ([("oggi", "today", "hoy"), ("quanto", "cosa", "quante", "how", "what", "cuánto", "cuanto", "qué")],
      _oggi),
     ([("ieri", "yesterday", "ayer"), ("cosa", "quanto", "quante", "what", "how", "qué", "cuánto")],
@@ -221,11 +310,18 @@ REGOLE = [
     ([("settimana", "week", "semana"), ("quanto", "quante", "how", "cuánto", "cuanto", "lavorato",
                                         "worked", "trabajado")], _settimana),
     ([("codex",), ("quante", "quanto", "how", "cuántas", "confronto", "contro", "versus", "vs",
-                   "sessioni", "sessions", "fatto", "done")], _agenti),
+                   "sessioni", "sessions", "fatto", "done", "va", "sta", "facendo", "doing")],
+     _agenti),
     ([("progetti", "projects", "proyectos"), ("quanti", "quante", "how many", "cuántos", "attivi",
                                               "active", "activos", "elenca", "list")], _progetti),
     ([("post", "social"), ("quanti", "quante", "how many", "cuántos", "coda", "queue", "cola",
                            "pubblicati", "published")], _post),
+    ([("lavagna", "board", "pizarra", "aperto", "aperte", "open", "abierto"),
+      ("cosa", "che", "what", "qué", "quanto", "quante", "sta", "c'è", "ce", "hay", "elenca")],
+     _lavagna),
+    ([("lanci", "lancio", "runs", "run", "lanzamiento", "lanzamientos", "mandato", "mandati"),
+      ("com'è", "come", "how", "quanti", "andati", "andata", "went", "cómo", "como", "falliti",
+       "failed", "corso")], _lanci),
 ]
 
 
