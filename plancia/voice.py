@@ -97,12 +97,27 @@ def _post(url, payload, timeout=20):
         return json.loads(res.read().decode("utf-8") or "{}")
 
 
+# Quando Voicebox non risponde ci si ricorda per un po' che non risponde. Se e'
+# spento la risposta e' immediata e non serve; se e' piantato, cioe' il processo
+# c'e' ma non accetta, ogni frase pagherebbe l'attesa intera. E gli succede: il
+# suo server e' morto due volte in un minuto dentro MLX.
+_ultimo_no = 0.0
+RIPROVA_DOPO = 30
+
+
 def voicebox_vivo(timeout=1.5) -> bool:
+    global _ultimo_no
+    if time.time() - _ultimo_no < RIPROVA_DOPO:
+        return False
     try:
         code, _ = _get(f"{VOICEBOX}/profiles", timeout=timeout)
-        return code == 200
+        if code == 200:
+            _ultimo_no = 0.0
+            return True
     except Exception:
-        return False
+        pass
+    _ultimo_no = time.time()
+    return False
 
 
 def voicebox_profili() -> list:

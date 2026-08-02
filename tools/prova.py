@@ -8,6 +8,7 @@ cose che si sono rotte almeno una volta, messe in fila, così prima di una
 release si sa in dieci secondi se una di quelle è tornata a rompersi.
 """
 
+import io
 import json
 import os
 import shutil
@@ -364,6 +365,21 @@ def main():
           (casa / ".claude/settings.json").exists())
 
     shutil.rmtree(casa, ignore_errors=True)
+
+    # ------------------------------------------------------------------ voce
+    from plancia import voice as _v  # noqa: E402
+    _v._ultimo_no = 0.0
+    _v.voicebox_vivo()
+    import time as _t2
+    _t0 = _t2.perf_counter()
+    _v.voicebox_vivo()
+    secondo = (_t2.perf_counter() - _t0) * 1000
+    prova("un Voicebox che non risponde non si richiede a ogni frase",
+          secondo < 5, f"{secondo:.0f} ms")
+    _v._ultimo_no = 0.0
+
+    prova("il testo per la voce passa dalla sintesi",
+          "per_voce" in io.open(RADICE / "plancia" / "voice.py", encoding="utf-8").read())
 
     # ----------------------------------------------------------------- MCP
     # E' la porta da cui entrano Claude e Codex: se non si apre, in ogni
