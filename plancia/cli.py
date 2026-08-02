@@ -191,7 +191,12 @@ def cmd_lanci(args):
 def cmd_eventi(args):
     from . import eventi
     for e in eventi.leggi(args.dopo, args.tipo, args.limite):
-        print(f"{e['ts'][:19]}  {e['tipo']:<22} {e['titolo'][:52]}  {e['id']}")
+        # Il progetto e l'agente sono la metà del valore di un evento: senza,
+        # chi legge deve andare a cercarsi da solo di cosa si parlava.
+        coda = " · ".join(x for x in (e.get("progetto"),
+                                      (e.get("dati") or {}).get("agente")) if x)
+        print(f"{e['ts'][:19]}  {e['tipo']:<22} {e['titolo'][:46]:<46}  "
+              f"{coda:<24}  {e['id']}")
 
 
 def cmd_projects(args):
