@@ -1,6 +1,6 @@
 # Plancia
 
-[![collaudo](https://github.com/eugenionerelli/plancia/actions/workflows/prova.yml/badge.svg)](https://github.com/eugenionerelli/plancia/actions/workflows/prova.yml)
+[![collaudo](https://github.com/nerln/plancia/actions/workflows/prova.yml/badge.svg)](https://github.com/nerln/plancia/actions/workflows/prova.yml)
 
 Una lavagna sola per il lavoro che fai con l'IA. Claude Code e Codex si scrivono
 già tutto, in file sul tuo disco. Solo che non li legge nessuno insieme. Plancia
@@ -8,7 +8,7 @@ sì: tutti i task aperti di tutti e due su una lavagna sola, un riepilogo parlat
 della giornata che finisce con la cosa che conviene fare, e un posto solo da cui
 rimandare il lavoro.
 
-Sito: [plancia](https://eugenionerelli.github.io/plancia/).
+Sito: [plancia](https://nerln.github.io/plancia/).
 
 Tutto in locale: nessuna telemetria, nessun account, nessun nostro server.
 L'unica cosa che esce è il lavoro che affidi tu a un agente, e passa dal comando
@@ -309,6 +309,6 @@ fino alla 0.2.0 erano MIT e restano MIT.
 
 Compilarlo dal sorgente è gratis e lo resterà. Una build firmata e notarizzata,
 che si apre con un doppio clic, si paga quanto vuoi da 5 euro sul
-[sito](https://eugenionerelli.github.io/plancia/#prezzo). È lo stesso programma:
+[sito](https://nerln.github.io/plancia/#prezzo). È lo stesso programma:
 quello che paghi è il certificato Apple, la notarizzazione e la manutenzione.
 Come si taglia una release sta in [docs/RILASCIO.md](docs/RILASCIO.md).

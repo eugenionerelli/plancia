@@ -88,7 +88,7 @@ Due conseguenze pratiche:
 - senza notarizzazione, `brew install --cask plancia` non sarà mai possibile in
   `Homebrew/cask`
 - **un tap tuo resta libero**: sui tap di terzi Homebrew non controlla neanche lo
-  stato della firma. Se vuoi un `brew tap eugenionerelli/plancia` che installa la
+  stato della firma. Se vuoi un `brew tap nerln/plancia` che installa la
   build compilata dal sorgente, quella strada resta aperta anche senza
   certificato
 
@@ -155,4 +155,4 @@ tutto**, ed è un motivo in più per farlo.
 3. accendi GitHub Sponsors in parallelo
 4. metti il link di Polar nella costante `PAGAMENTO` in `site/index.html`
 5. `./tools/rilascia.sh <versione>` e carica il DMG firmato come release
-6. il tap Homebrew, se lo vuoi, dopo: `brew tap eugenionerelli/plancia`
+6. il tap Homebrew, se lo vuoi, dopo: `brew tap nerln/plancia`

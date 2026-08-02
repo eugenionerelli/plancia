@@ -32,7 +32,7 @@ came after.
 ## Installing
 
 ```bash
-git clone https://github.com/eugenionerelli/plancia.git ~/dev/plancia
+git clone https://github.com/nerln/plancia.git ~/dev/plancia
 cd ~/dev/plancia
 ./bin/plancia install
 ./bin/plancia init
@@ -53,7 +53,7 @@ Building from source, with the commands above, avoids all of that and gives you
 the same program.
 
 A signed build that opens with a double click is what the paid version will be:
-see the [website](https://eugenionerelli.github.io/plancia/#prezzo). The source
+see the [website](https://nerln.github.io/plancia/#prezzo). The source
 stays free and complete, always. What the price covers is the Apple certificate,
 the notarisation, and the maintenance. It is the model Ardour and Krita have used
 for years.

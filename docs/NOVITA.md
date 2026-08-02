@@ -234,7 +234,7 @@ La skill `plancia` dice a Claude quando usarli, e una regola in particolare:
 ## Il sito e il prezzo
 
 Il sito sta in `site/` e si pubblica da solo su GitHub Pages a ogni push:
-**https://eugenionerelli.github.io/plancia/**
+**https://nerln.github.io/plancia/**
 
 Il modello: sorgente completo e gratuito sotto GPL, build firmata a pagamento
 (quanto vuoi, da 5 euro). È quello di Ardour e Krita. Quello che si paga è il

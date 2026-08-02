@@ -1,13 +1,13 @@
 # Plancia
 
-[![collaudo](https://github.com/eugenionerelli/plancia/actions/workflows/prova.yml/badge.svg)](https://github.com/eugenionerelli/plancia/actions/workflows/prova.yml)
+[![collaudo](https://github.com/nerln/plancia/actions/workflows/prova.yml/badge.svg)](https://github.com/nerln/plancia/actions/workflows/prova.yml)
 
 One board for the work you do with AI. Claude Code and Codex already write down
 everything they do, in files on your disk. Nothing reads them together. Plancia
 does: every open task from both on one board, a spoken recap of the day that ends
 with what is worth doing next, and one place to send the work back.
 
-Website: [plancia](https://eugenionerelli.github.io/plancia/).
+Website: [plancia](https://nerln.github.io/plancia/).
 
 Local-first: no telemetry, no account, no server of ours. The only thing that
 goes out is the work you explicitly hand to an agent, and it goes through the
@@ -39,7 +39,7 @@ See [docs/NOVITA.md](docs/NOVITA.md) for what changed recently and why.
 ## Install
 
 ```bash
-git clone https://github.com/eugenionerelli/plancia.git ~/dev/plancia
+git clone https://github.com/nerln/plancia.git ~/dev/plancia
 cd ~/dev/plancia
 ./bin/plancia install      # command, MCP server, hooks, skills, autostart
 ./bin/plancia init         # builds your project map from repos, folders, memory
@@ -308,6 +308,6 @@ to 0.2.0 were MIT and stay MIT.
 
 Building from source is free and always will be. A signed and notarised build,
 which opens with a double click, is pay what you want from €5 on the
-[website](https://eugenionerelli.github.io/plancia/#prezzo). It is the same
+[website](https://nerln.github.io/plancia/#prezzo). It is the same
 program: what you pay for is the Apple certificate, the notarisation and the
 maintenance. See [docs/RILASCIO.md](docs/RILASCIO.md) for how a release is cut.
