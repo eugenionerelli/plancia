@@ -248,6 +248,8 @@ AGGIUNTE = {
     # un task non è solo una nota: può dire a chi tocca, come farlo e dove
     "tasks": (("agent", "TEXT DEFAULT ''"), ("prompt", "TEXT DEFAULT ''"),
               ("cwd", "TEXT DEFAULT ''"), ("run_id", "INTEGER")),
+    # da quale conversazione è uscito questo commit
+    "commits": (("session_id", "TEXT DEFAULT ''"),),
 }
 
 

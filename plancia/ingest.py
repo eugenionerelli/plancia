@@ -711,6 +711,47 @@ def drain_queue(conn, progress=None) -> int:
 GIORNI_PRIMA_DI_ARCHIVIARE = 14
 
 
+def attribuisci_commit(conn, progress=None) -> int:
+    """Da quale conversazione è uscito ogni commit.
+
+    Un commit non dice mai da dove viene. Ma se alle 14:32 hai committato su un
+    repo, e fra le 14:05 e le 14:40 c'era aperta una sessione su quel progetto,
+    è quasi sempre quella. Si accetta anche mezz'ora dopo la fine: si committa
+    quando la sessione è già finita, non mentre parla.
+
+    Non è una prova, è un indizio, e serve a una cosa sola: poter risalire dal
+    commit alla conversazione che l'ha prodotto senza cercare a mano.
+    """
+    fatti = 0
+    finestra = ("AND started_at <= ? AND datetime(COALESCE(NULLIF(ended_at,''), started_at), "
+                "'+30 minutes') >= datetime(?) ORDER BY started_at DESC LIMIT 1")
+    for c in conn.execute(
+            "SELECT c.rowid AS rid, c.date, r.project_id, r.local_path, r.name FROM commits c "
+            "JOIN repos r ON r.name = c.repo "
+            "WHERE COALESCE(c.session_id,'') = '' "
+            "ORDER BY c.date DESC LIMIT 400").fetchall():
+        riga = None
+        if c["project_id"]:
+            riga = conn.execute(
+                "SELECT session_id FROM sessions WHERE project_id = ? " + finestra,
+                (c["project_id"], c["date"], c["date"])).fetchone()
+        # Seconda strada: la cartella. Un progetto può non essere legato al repo,
+        # ma se la sessione girava dentro quella cartella il commit è suo.
+        if not riga and c["local_path"]:
+            riga = conn.execute(
+                "SELECT session_id FROM sessions WHERE cwd LIKE ? " + finestra,
+                (c["local_path"].rstrip("/") + "%", c["date"], c["date"])).fetchone()
+        if riga:
+            conn.execute("UPDATE commits SET session_id=? WHERE rowid=?",
+                         (riga["session_id"], c["rid"]))
+            fatti += 1
+    if fatti:
+        conn.commit()
+        if progress:
+            progress(f"commit legati a una sessione: {fatti}")
+    return fatti
+
+
 def cura_progetti(conn, progress=None) -> int:
     """Un progetto nato da una cartella dove hai lavorato una volta tre
     settimane fa non è un progetto attivo: è un ricordo.
@@ -770,6 +811,7 @@ def sync(full=False, progress=None, skip_git=False, modo="tutto") -> dict:
             result["repo"] = sync_repos(conn, progress)
             result["git_locali"] = sync_local_git(conn, progress)
         result["archiviati"] = cura_progetti(conn, progress)
+        result["commit_attribuiti"] = attribuisci_commit(conn, progress)
         log("indice di ricerca", progress)
         store.rebuild_search(conn)
 

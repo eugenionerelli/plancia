@@ -124,6 +124,19 @@ volte e mezzo la tua media di trenta giorni, e dice di quanto. Prima quel
 segnale esisteva solo dentro una proposta, quindi lo vedevi solo se leggevi il
 riepilogo fino in fondo.
 
+## Da quale conversazione è uscito un commit
+
+Un commit non dice mai da dove viene. Ma se alle 14:32 hai committato su un
+repo, e fra le 14:05 e le 14:40 c'era aperta una sessione su quel progetto, è
+quasi sempre quella. Plancia lo scrive, e nella scheda del progetto ogni commit
+recente dice "da" con il titolo della conversazione.
+
+Si accetta anche mezz'ora dopo la fine, perché si committa quando la sessione è
+già chiusa. Se il progetto non basta, si prova con la cartella. Non è una prova,
+è un indizio: serve a risalire dal commit alla conversazione senza cercare a
+mano. Sul tuo archivio ne lega 36 su 97, e sono quelli in cui avevi Claude Code
+aperto dentro il repo.
+
 ## Il registro degli eventi
 
 `~/.plancia/eventi.jsonl`, una riga JSON per evento, schema `plancia.evento/1`,

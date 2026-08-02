@@ -115,6 +115,18 @@ def main():
           recap.solo_cache(conn, "it").get("testo") is None,
           "la cache tiene una lingua sola")
 
+    # ------------------------------------------------------ commit e sessioni
+    from plancia import ingest  # noqa: E402
+    n = ingest.attribuisci_commit(conn)
+    prova("l'attribuzione dei commit gira", isinstance(n, int))
+    sbagliati = conn.execute(
+        "SELECT COUNT(*) FROM commits c JOIN repos r ON r.name=c.repo "
+        "JOIN sessions s ON s.session_id=c.session_id "
+        "WHERE COALESCE(c.session_id,'')<>'' AND r.project_id IS NOT NULL "
+        "AND s.project_id IS NOT NULL AND s.project_id <> r.project_id").fetchone()[0]
+    prova("nessun commit finisce nella sessione di un altro progetto",
+          sbagliati == 0, f"sbagliati: {sbagliati}")
+
     # ---------------------------------------------------------------- eventi
     e = eventi.scrivi("lavoro.completato", "prova", progetto="lumen",
                       dati={"agente": "claude"})

@@ -54,7 +54,7 @@ const EN = {
   'quello che ogni nuova sessione di Claude riceve': 'what every new Claude session receives',
   'Copia': 'Copy', 'Governo': 'Control', 'prossimo passo concreto': 'concrete next step',
   'Salva': 'Save', 'nessuno': 'none', 'Memoria': 'Memory', 'Repository': 'Repositories',
-  'Commit recenti': 'Recent commits', 'Post': 'Posts', 'Cronologia': 'History',
+  'Commit recenti': 'Recent commits', 'da': 'from', 'Post': 'Posts', 'Cronologia': 'History',
   'priorità': 'priority', 'attivo ': 'active ', 'modifiche': 'changes',
   'la tua giornata, raccontata come la diresti a voce': 'your day, told the way you would say it',
   'Rigenera': 'Regenerate', 'Ascolta': 'Listen', 'Ferma': 'Stop', 'Chiedi': 'Ask',
@@ -1150,7 +1150,8 @@ async function openProject(key) {
     ${d.commit.length ? section(T('Commit recenti'), `<div class="panel"><div class="panel-body tight">${
       d.commit.slice(0, 12).map((c) => `<div class="row"><div class="main">
         <div class="title truncate">${esc(c.message)}</div>
-        <div class="sub mono">${esc(c.repo)} · ${esc((c.sha || '').slice(0, 7))} · ${ago(c.date)}</div>
+        <div class="sub mono">${esc(c.repo)} · ${esc((c.sha || '').slice(0, 7))} · ${ago(c.date)}${
+          c.sessione_titolo ? ` · <span style="opacity:.75">${T('da')} ${esc(c.sessione_titolo.slice(0, 46))}</span>` : ''}</div>
       </div></div>`).join('')}</div></div>`) : ''}
 
     ${d.sessioni.length ? section(T('Sessioni'), `<div class="panel"><div class="panel-body tight">${

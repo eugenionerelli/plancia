@@ -173,7 +173,9 @@ def project_detail(conn, ident) -> dict:
         "repo": [dict(r) for r in conn.execute(
             "SELECT * FROM repos WHERE project_id=?", (pid,)).fetchall()],
         "commit": [dict(r) for r in conn.execute(
-            "SELECT c.* FROM commits c JOIN repos r ON r.name=c.repo WHERE r.project_id=? "
+            "SELECT c.*, s.title AS sessione_titolo FROM commits c "
+            "JOIN repos r ON r.name=c.repo "
+            "LEFT JOIN sessions s ON s.session_id = c.session_id WHERE r.project_id=? "
             "ORDER BY c.date DESC LIMIT 30", (pid,)).fetchall()],
         "eventi": [dict(r) for r in conn.execute(
             "SELECT * FROM events WHERE project_id=? ORDER BY ts DESC LIMIT 60", (pid,)).fetchall()],
