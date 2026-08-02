@@ -97,6 +97,9 @@ Quello che è cambiato sotto:
 - **Quando un lancio finisce te lo dice**, anche se nel frattempo stavi facendo
   altro. Un agente che lavora tre minuti in silenzio ti riporta a guardare lo
   schermo, che è esattamente quello da evitare.
+- **Dopo tre minuti che non parli il microfono si chiude da solo.** Un programma
+  che si vanta di non mandare niente fuori non può tenerlo aperto tutto il
+  giorno perché ti sei alzato senza dire niente. Tocca l'orbita per riprendere.
 
 ### La prima volta
 
@@ -109,6 +112,17 @@ un'app davanti.
 Se ricompili spesso, `./tools/certificato.sh` ti fa un certificato di firma
 stabile: senza, l'identità dell'app cambia a ogni compilazione e il consenso
 viene chiesto di nuovo ogni volta.
+
+## Quanto costa ogni progetto
+
+Ogni scheda di progetto dice quanti token ha generato negli ultimi trenta
+giorni. Non sono euro: sono la cosa che finisce davvero, perché i limiti si
+prendono lì.
+
+In Oggi il numero grande dei token diventa ambra quando la giornata è sopra due
+volte e mezzo la tua media di trenta giorni, e dice di quanto. Prima quel
+segnale esisteva solo dentro una proposta, quindi lo vedevi solo se leggevi il
+riepilogo fino in fondo.
 
 ## Il registro degli eventi
 
