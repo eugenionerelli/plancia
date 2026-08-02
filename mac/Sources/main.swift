@@ -92,6 +92,19 @@ enum API {
         }.resume()
     }
 
+    /// Come `request`, ma per le rotte che tornano una lista invece di un
+    /// oggetto: `/api/projects`, `/api/runs`.
+    static func lista(_ path: String, timeout: TimeInterval = 20,
+                      done: @escaping ([[String: Any]]) -> Void) {
+        guard let url = URL(string: Conf.base + path) else { return done([]) }
+        var req = URLRequest(url: url, timeoutInterval: timeout)
+        req.setValue(Conf.token, forHTTPHeaderField: "X-Plancia-Token")
+        URLSession.shared.dataTask(with: req) { data, _, _ in
+            let j = data.flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [[String: Any]]
+            DispatchQueue.main.async { done(j ?? []) }
+        }.resume()
+    }
+
     static func alive(_ done: @escaping (Bool) -> Void) {
         guard let url = URL(string: Conf.base + "/api/status") else { return done(false) }
         var req = URLRequest(url: url, timeoutInterval: 2)

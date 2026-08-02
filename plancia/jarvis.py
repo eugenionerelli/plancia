@@ -55,6 +55,11 @@ MODELLI = {
     ],
     "aggiorna": [r"^(?:aggiorna|sincronizza|rileggi)\b", r"^(?:refresh|sync|update)\b",
                  r"^(?:actualiza|sincroniza)\b"],
+    # Fermare un lavoro partito è diverso dal far tacere la voce: se uno dice
+    # "annulla" mentre un agente sta lavorando, vuole fermare quello.
+    "annulla": [r"^(?:annulla|ferma il lavoro|ferma il lancio|interrompi)\b(.*)$",
+                r"^(?:cancel|stop the run|abort)\b(.*)$",
+                r"^(?:cancela|para el trabajo)\b(.*)$"],
     "ferma": [r"^(?:basta|ferma(?:ti)?|stop|zitto|silenzio|smetti)\b",
               r"^(?:quiet|shut up|be quiet)\b", r"^(?:para|c[aá]llate|silencio)\b"],
     "task_add": [
@@ -84,6 +89,8 @@ RISPOSTE = {
         "vai": "Apro {vista}.",
         "aggiorna": "Rileggo le fonti.",
         "ferma": "Va bene.",
+        "niente_da_fermare": "Non c'è niente in corso da fermare.",
+        "fermato": "Fermato. Lavori interrotti: {n}.",
         "task_add": "Segnato: {titolo}.",
         "task_done": "Chiuso: {titolo}.",
         "task_non_trovato": "Non trovo un task aperto che assomigli a {titolo}.",
@@ -101,6 +108,8 @@ RISPOSTE = {
         "vai": "Opening {vista}.",
         "aggiorna": "Re-reading the sources.",
         "ferma": "All right.",
+        "niente_da_fermare": "There is nothing running to stop.",
+        "fermato": "Stopped. Runs interrupted: {n}.",
         "task_add": "Noted: {titolo}.",
         "task_done": "Closed: {titolo}.",
         "task_non_trovato": "I cannot find an open task like {titolo}.",
@@ -118,6 +127,8 @@ RISPOSTE = {
         "vai": "Abro {vista}.",
         "aggiorna": "Releo las fuentes.",
         "ferma": "Vale.",
+        "niente_da_fermare": "No hay nada en marcha que parar.",
+        "fermato": "Parado. Trabajos interrumpidos: {n}.",
         "task_add": "Apuntado: {titolo}.",
         "task_done": "Cerrado: {titolo}.",
         "task_non_trovato": "No encuentro una tarea abierta parecida a {titolo}.",
@@ -267,6 +278,17 @@ def esegui(testo: str, lang=None, conn=None) -> dict:
         chiudi = True
     try:
         comando, arg = riconosci(testo)
+
+        if comando == "annulla":
+            from . import cantiere
+            attivi = [r for r in cantiere.elenco(conn, limite=5)
+                      if r["stato"] in ("in coda", "in corso")]
+            if not attivi:
+                return {"tipo": "annulla", "risposta": d["niente_da_fermare"], "via": "comando"}
+            for r in attivi:
+                cantiere.annulla(conn, r["id"])
+            return {"tipo": "annulla",
+                    "risposta": d["fermato"].format(n=len(attivi)), "via": "comando"}
 
         if comando == "ferma":
             return {"tipo": "ferma", "risposta": d["ferma"], "azione": {"tipo": "ferma"},

@@ -106,6 +106,12 @@ un decimo di secondo, in locale. Tutto il resto va a Claude Code in modalità no
 interattiva con i tool `plancia_*` aperti, quindi il task lo aggiunge davvero, il
 progetto lo aggiorna davvero, l'archivio lo cerca davvero.
 
+Il microfono resta aperto anche mentre risponde, quindi lo puoi interrompere
+ricominciando a parlare. È la cancellazione dell'eco sul nodo di ingresso a
+renderlo possibile: senza, si sente da solo e si interrompe da solo. "Annulla"
+ferma un lavoro partito, "basta" chiude il pannello. Quando un lancio finisce te
+lo dice a voce anche se nel frattempo stavi facendo altro.
+
 ```bash
 plancia jarvis "ricordami di scrivere la nota di migrazione"   # lo stesso, scritto
 ```

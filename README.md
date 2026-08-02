@@ -106,6 +106,12 @@ locally in a tenth of a second. Everything else goes to Claude Code in headless
 mode with the `plancia_*` tools open, so it can actually add the task, update the
 project or search the archive, not just answer about it.
 
+The microphone stays open while it answers, so you can cut it off by simply
+speaking again. Echo cancellation on the input node is what makes that possible:
+without it, it hears its own voice and interrupts itself. Say "cancel" to stop a
+running dispatch, "stop" to close the panel. When a dispatched run finishes it
+tells you out loud, even if you have moved on to something else.
+
 ```bash
 plancia jarvis "remind me to write the migration note"   # same thing, typed
 ```

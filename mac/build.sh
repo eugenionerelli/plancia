@@ -97,9 +97,31 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-echo "· firma locale"
-codesign --force --deep --sign - "$APP" 2>/dev/null || \
-  echo "  (firma non riuscita, l'app funziona lo stesso in locale)"
+# La firma decide anche i permessi. macOS lega il consenso a microfono e
+# dettatura all'identità con cui l'app è firmata: con la firma ad hoc l'impronta
+# cambia a ogni compilazione, quindi il sistema li richiede da capo ogni volta e
+# Jarvis riparte muto. Se in portachiavi c'è un certificato stabile (Developer
+# ID, o uno auto firmato che ti sei fatto e chiamato Plancia) si usa quello, e il
+# consenso resta dato.
+# Il `|| true` non è pigrizia: senza certificati `grep` esce con 1 e con
+# `set -e` la compilazione si fermerebbe proprio dove non serve.
+FIRMA="${FIRMA:-$(security find-identity -v -p codesigning 2>/dev/null \
+  | grep -E "Developer ID Application|Plancia" | head -1 | sed -E 's/.*"(.*)"/\1/' || true)}"
+
+if [ -n "$FIRMA" ]; then
+  echo "· firma: $FIRMA"
+  codesign --force --deep --options runtime --timestamp \
+           --entitlements "$ROOT/mac/Plancia.entitlements" \
+           --sign "$FIRMA" "$APP" 2>/dev/null || \
+    codesign --force --deep --sign "$FIRMA" "$APP" 2>/dev/null || \
+    echo "  (firma non riuscita)"
+else
+  echo "· firma locale, ad hoc"
+  echo "  i permessi del microfono verranno richiesti a ogni ricompilazione:"
+  echo "  per non ripeterli:  ./tools/certificato.sh"
+  codesign --force --deep --sign - "$APP" 2>/dev/null || \
+    echo "  (firma non riuscita, l'app funziona lo stesso in locale)"
+fi
 
 echo "· fatto: $APP"
 
