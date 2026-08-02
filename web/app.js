@@ -162,6 +162,14 @@ function ago(ts) {
 const dateIt = (ts) => ts ? new Date(ts).toLocaleDateString(LOC(),
   { day: '2-digit', month: 'short', year: 'numeric' }) : '';
 const num = (n) => (n ?? 0).toLocaleString(LOC());
+// Di una cartella interessa il nome, non la strada per arrivarci: dentro il
+// Drive un percorso completo occupa una riga intera per dire "Voicebox-Fish".
+const cartellaCorta = (p) => {
+  if (!p) return '';
+  const pezzi = String(p).replace(/\/+$/, '').split('/');
+  return pezzi[pezzi.length - 1] || p;
+};
+
 const kilo = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1000 ? Math.round(n / 1000) + 'k' : String(n ?? 0);
 
 function toast(msg, bad) {
@@ -843,7 +851,7 @@ const rigaLancio = (r) => `
     <div class="main">
       <div class="title truncate">${esc(r.task || (r.prompt || '').split('\n').filter((x) =>
         x && !x.startsWith('#'))[1] || (r.prompt || '').slice(0, 70))}</div>
-      <div class="sub">${T(r.modo)} · ${esc(r.cwd || '')}${r.token ? ' · ' + kilo(r.token) + ' token' : ''}</div>
+      <div class="sub" title="${esc(r.cwd || '')}">${T(r.modo)} · ${esc(cartellaCorta(r.cwd))}${r.token ? ' · ' + kilo(r.token) + ' token' : ''}</div>
     </div>
     <div class="side">
       <span class="tag ${STATO_LANCIO[r.stato] || ''}">${T(r.stato)}</span>
