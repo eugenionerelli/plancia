@@ -12,6 +12,7 @@ import subprocess
 from datetime import datetime, timedelta, timezone
 
 from . import config, proposte, store
+from .voce_testo import per_voce
 
 SOSTANZA = ("AND ((SELECT COUNT(*) FROM sessions s WHERE s.project_id=p.id) >= 3 OR p.id IN (SELECT project_id FROM project_links WHERE kind IN ('repo','memory')))")
 
@@ -463,6 +464,11 @@ def build(conn=None, day=None, lang=None, engine=None, parole=140, cache=True) -
                 fonte = "claude"
         if not testo:
             testo = render_template(dati, lang)
+        # Il riepilogo nasce per essere ascoltato, quindi si ripulisce alla
+        # fonte e non solo sulla strada della voce: il prossimo passo di un
+        # progetto può contenere un indirizzo, e letto ad alta voce diventa una
+        # filastrocca.
+        testo = per_voce(testo, lang)
         store.set_meta(conn, "recap_impronta", f"{firma}|{lang}|{dati['giorno']}")
         store.set_meta(conn, "recap_testo", testo)
         store.set_meta(conn, "recap_lingua", lang)

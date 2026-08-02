@@ -833,6 +833,9 @@ final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate, NSText
                 return
             }
             let testo = (j?["risposta"] as? String) ?? ""
+            // Quello che si legge e quello che si dice non sono la stessa cosa:
+            // il secondo non ha indirizzi, percorsi né sha.
+            let perLaVoce = (j?["da_dire"] as? String) ?? testo
             self.risposta.stringValue = testo
             if let azione = j?["azione"] as? [String: Any] {
                 self.onAzione?(azione)
@@ -841,8 +844,8 @@ final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate, NSText
             if let file = j?["file"] as? String {
                 self.stato = .parlo
                 Player.shared.play(path: file)
-            } else if !testo.isEmpty {
-                self.parla(testo)
+            } else if !perLaVoce.isEmpty {
+                self.parla(perLaVoce)
             } else {
                 self.riprendiAscolto()
             }

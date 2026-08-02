@@ -105,6 +105,12 @@ Quello che è cambiato sotto:
   non c'è, e serve quando una frase viene capita male: la correggi scrivendo
   invece di ripeterla tutta, che è il momento in cui di solito si molla.
 
+- **Quello che si legge e quello che si dice non sono più la stessa cosa.** Un
+  indirizzo letto ad alta voce diventa "acca ti ti pi due punti barra barra", un
+  percorso una filastrocca di cartelle, uno sha quaranta lettere a caso. Adesso
+  sulla strada della voce gli indirizzi diventano "su GitHub", dei percorsi resta
+  l'ultimo pezzo, e gli sha spariscono. Sullo schermo il testo resta intero.
+
 ### Le domande che non passano da un modello
 
 Tre nuove famiglie di domande rispondono in meno di un millesimo di secondo,

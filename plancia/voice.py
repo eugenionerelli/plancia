@@ -15,6 +15,7 @@ import urllib.request
 from pathlib import Path
 
 from . import config
+from .voce_testo import per_voce
 
 VOICEBOX = "http://127.0.0.1:17493"
 AUDIO_DIR = config.DATA_DIR / "audio"
@@ -170,6 +171,8 @@ def motore_scelto() -> str:
 
 
 def sintesi(testo: str, lang: str = "it", motore: str = None, cache=True) -> dict:
+    # Ultimo punto prima dell'audio: qui il testo diventa una cosa da dire.
+    testo = per_voce(testo, lang)
     """Restituisce il file audio, generandolo solo se non c'è già."""
     AUDIO_DIR.mkdir(parents=True, exist_ok=True)
     motore = motore or motore_scelto()

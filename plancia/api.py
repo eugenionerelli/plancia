@@ -455,6 +455,12 @@ class Handler(BaseHTTPRequestHandler):
                 # fa il chiamante: parlare parte subito invece di aspettare che
                 # il server scriva un file e lo rimandi indietro.
                 esito["motore"] = "voicebox" if voice.voicebox_vivo() else "say"
+                # Quando a parlare è l'app con la voce di sistema, il testo da
+                # dire è diverso da quello da leggere: niente indirizzi, niente
+                # percorsi, niente sha.
+                if esito.get("risposta"):
+                    from .voce_testo import per_voce
+                    esito["da_dire"] = per_voce(esito["risposta"], lang)
                 nativa = body.get("voce_nativa") and esito["motore"] == "say"
                 if not esito.get("muto") and body.get("voce", True) and \
                         esito.get("risposta") and not nativa:

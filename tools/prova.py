@@ -115,6 +115,22 @@ def main():
           recap.solo_cache(conn, "it").get("testo") is None,
           "la cache tiene una lingua sola")
 
+    # ------------------------------------------------------- testo per la voce
+    from plancia.voce_testo import per_voce  # noqa: E402
+    prova("gli indirizzi non si leggono lettera per lettera",
+          "GitHub" in per_voce("pubblicato su github.com/tizio/repo, poi si vede", "it")
+          and "github.com" not in per_voce("pubblicato su github.com/tizio/repo", "it"))
+    prova("di un percorso resta l'ultimo pezzo",
+          per_voce("sta in ~/.plancia/eventi.jsonl", "it") == "sta in eventi.jsonl")
+    prova("gli sha non si dicono",
+          "4f1a2c9e8b7d" not in per_voce("il commit 4f1a2c9e8b7d6543 è a posto", "it"))
+    prova("la punteggiatura della frase resta",
+          per_voce("vedi github.com/a/b, poi torna", "it").endswith("poi torna")
+          and "," in per_voce("vedi github.com/a/b, poi torna", "it"))
+    prova("una frase normale non viene toccata",
+          per_voce("Oggi tre sessioni e due commit, niente di strano.", "it")
+          == "Oggi tre sessioni e due commit, niente di strano.")
+
     # --------------------------------------------------- risposte senza modello
     from plancia import risposte  # noqa: E402
     domande = {
