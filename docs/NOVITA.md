@@ -141,7 +141,9 @@ fondo e ti risponde a voce.
 
 Se ricompili spesso, `./tools/certificato.sh` ti fa un certificato di firma
 stabile: senza, l'identità dell'app cambia a ogni compilazione e il consenso
-viene chiesto di nuovo ogni volta.
+viene chiesto di nuovo ogni volta. Chiede la password del Mac una volta; se il
+portachiavi non lo prende, ti lascia il file sulla Scrivania con i quattro passi
+per farlo a mano.
 
 ## Quanto costa ogni progetto
 

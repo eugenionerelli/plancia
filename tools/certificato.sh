@@ -55,9 +55,26 @@ openssl pkcs12 -export -inkey "$TMP/chiave.pem" -in "$TMP/cert.pem" \
   -out "$TMP/plancia.p12" -passout pass:plancia -name "$NOME" \
   -keypbe PBE-SHA1-3DES -certpbe PBE-SHA1-3DES -macalg sha1 2>/dev/null
 
-echo "==> lo metto nel portachiavi (può chiederti la password)"
-security import "$TMP/plancia.p12" -k ~/Library/Keychains/login.keychain-db \
-  -P plancia -A -T /usr/bin/codesign -T /usr/bin/security >/dev/null
+echo "==> lo metto nel portachiavi (ti chiederà la password del Mac)"
+if ! security import "$TMP/plancia.p12" -k ~/Library/Keychains/login.keychain-db \
+     -P plancia -A -T /usr/bin/codesign -T /usr/bin/security >/dev/null 2>&1; then
+  # Se il portachiavi non lo prende, il file c'è comunque: si può fare a mano,
+  # ed è meglio dirlo che lasciare un errore secco.
+  cp "$TMP/plancia.p12" "$HOME/Desktop/plancia-certificato.p12"
+  cat <<FINE
+
+Non sono riuscito a metterlo nel portachiavi da qui.
+Te l'ho lasciato sulla Scrivania: plancia-certificato.p12
+
+Fallo a mano, sono trenta secondi:
+  1. doppio clic sul file (la password è: plancia)
+  2. si apre Accesso Portachiavi, cerca "Plancia"
+  3. doppio clic, apri "Fiducia", metti "Firma codice" su "Consenti sempre"
+  4. chiudi, poi:  cd $(pwd) && ./mac/build.sh --install
+
+FINE
+  exit 1
+fi
 
 # Senza questo, codesign chiede il permesso di usare la chiave a ogni firma.
 security set-key-partition-list -S apple-tool:,apple:,codesign: \
