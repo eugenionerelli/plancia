@@ -56,7 +56,7 @@ PY
 echo "==> controlli"
 python3 -m compileall -q plancia >/dev/null
 node --check web/app.js 2>/dev/null || echo "    (node non c'è, salto il controllo di app.js)"
-python3 tools/prova.py 2>/dev/null || true
+python3 tools/prova.py || { echo "il collaudo non passa: non si rilascia" >&2; exit 1; }
 
 # 3. la app
 echo "==> compilo"

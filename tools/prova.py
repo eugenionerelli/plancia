@@ -306,6 +306,14 @@ def main():
         prova("app.js si compila", esito.returncode == 0,
               esito.stderr.decode()[:200])
 
+    # -------------------------------------------------------------------- front
+    esito = subprocess.run([sys.executable, str(RADICE / "tools" / "prova-front.py")],
+                           capture_output=True)
+    fuori = esito.stdout.decode()
+    for riga in fuori.splitlines():
+        if riga.strip().startswith(("ok ", "NO ")):
+            prova(riga.split(None, 1)[1].strip(), riga.strip().startswith("ok"))
+
     # ------------------------------------------------------------------- stile
     # la regola di casa: niente em dash nei testi che legge una persona
     fuori = []

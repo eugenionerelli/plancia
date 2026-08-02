@@ -98,9 +98,12 @@ password del tuo account.
 ## Tagliare una release
 
 ```bash
-python3 tools/prova.py          # 41 controlli, dieci secondi
+python3 tools/prova.py          # 69 controlli, una decina di secondi
 ./tools/rilascia.sh 0.3.0       # versione, build, firma, DMG, notarizzazione
 ```
+
+Se il collaudo non passa, lo script si ferma: una release che esce con i
+controlli rossi è il modo più veloce per pubblicare una cosa rotta.
 
 Lo script fa, in ordine:
 
@@ -125,7 +128,7 @@ gh release create v0.3.0 dist/Plancia-0.3.0.dmg dist/Plancia-0.3.0.dmg.sha256 \
 
 ## La lista prima di pubblicare
 
-- [ ] `python3 tools/prova.py` verde
+- [ ] `python3 tools/prova.py` verde (lo script lo fa da sé e si ferma se non lo è)
 - [ ] gli screenshot sono rigenerati con i dati finti, non con i tuoi
       (`PLANCIA_HOME=/tmp/plancia-demo python3 tools/demo-data.py`, poi
       `PLANCIA_HOME=/tmp/plancia-demo ./bin/plancia serve --port 7799 --no-sync`)
