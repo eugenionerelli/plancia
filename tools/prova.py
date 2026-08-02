@@ -336,8 +336,11 @@ def main():
         "l = casa / '.local/bin/plancia'\n"
         "l.unlink() if l.is_symlink() else None\n"
         "[shutil.rmtree(d) for d in (s.SKILL_DIR, casa / '.claude/skills/riepilogo') if d.exists()]\n"
-        "j = json.loads((casa / '.claude.json').read_text())\n"
-        "st = json.loads((casa / '.claude/settings.json').read_text())\n"
+        # su una macchina senza Claude Code il file non esiste mai: non averlo
+        # e non avere il nostro server dentro sono la stessa cosa
+        "leggi = lambda p: json.loads(p.read_text()) if p.exists() else {}\n"
+        "j = leggi(casa / '.claude.json')\n"
+        "st = leggi(casa / '.claude/settings.json')\n"
         "print(list((j.get('mcpServers') or {}).keys()), list((st.get('hooks') or {}).keys()))\n"
         % str(RADICE))
     via = subprocess.run([sys.executable, "-c", codice_via], capture_output=True, env=ambiente)
@@ -347,7 +350,7 @@ def main():
           via.stdout.decode().strip())
     prova("porta via le skill", not (casa / ".claude/skills/plancia").exists())
     prova("lascia al suo posto la configurazione tua",
-          (casa / ".claude/settings.json").exists() and (casa / ".claude.json").exists())
+          (casa / ".claude/settings.json").exists())
 
     shutil.rmtree(casa, ignore_errors=True)
 
