@@ -284,6 +284,37 @@ def _chiudi(conn, run_id, stato, esito, acc, titolo, progetto, task_id, modo):
 # lettura
 # --------------------------------------------------------------------------
 
+def _vivo(pid) -> bool:
+    if not pid:
+        return False
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except Exception:
+        return False
+
+
+def riconcilia(conn) -> int:
+    """I lanci rimasti appesi quando il server si è fermato.
+
+    Il lavoro gira in un thread del server: se il server riparte, il thread non
+    c'è più ma la riga resta "in corso" per sempre, e da lì in poi la lavagna e
+    le proposte parlano di un lavoro che non sta lavorando.
+    """
+    fermi = 0
+    for r in conn.execute(
+            "SELECT id, pid, inizio FROM runs WHERE stato IN ('in coda','in corso')").fetchall():
+        if _vivo(r["pid"]):
+            continue
+        conn.execute("UPDATE runs SET stato='interrotto', fine=?, "
+                     "esito=COALESCE(NULLIF(esito,''), ?) WHERE id=?",
+                     (store.now(), "il lavoro si è fermato quando si è fermato Plancia", r["id"]))
+        fermi += 1
+    if fermi:
+        conn.commit()
+    return fermi
+
+
 def elenco(conn, limite=20) -> list:
     return [dict(r) for r in conn.execute(
         "SELECT r.*, t.title AS task FROM runs r LEFT JOIN tasks t ON t.id=r.task_id "
@@ -309,12 +340,16 @@ def in_corso(conn) -> int:
 
 def annulla(conn, run_id) -> bool:
     r = conn.execute("SELECT pid, stato FROM runs WHERE id=?", (run_id,)).fetchone()
-    if not r or r["stato"] not in ("in coda", "in corso") or not r["pid"]:
+    if not r or r["stato"] not in ("in coda", "in corso"):
         return False
-    try:
-        os.kill(r["pid"], 15)
-    except Exception:
-        pass
+    # Un lancio senza pid è uno che non è mai partito davvero, o il cui thread è
+    # morto con il server. Va chiuso lo stesso: prima diceva di averlo annullato
+    # e lo lasciava in coda per sempre.
+    if r["pid"]:
+        try:
+            os.kill(r["pid"], 15)
+        except Exception:
+            pass
     conn.execute("UPDATE runs SET stato='annullato', fine=? WHERE id=?",
                  (store.now(), run_id))
     conn.commit()

@@ -569,6 +569,16 @@ def serve(port=None, open_browser=False, sync_first=True) -> None:
     port = int(port or cfg.get("port", config.DEFAULT_PORT))
     conn = store.connect()
     store.init_db(conn)
+    store.migrate(conn)
+    # I lanci girano in un thread di questo processo: se il processo è stato
+    # riavviato, quelli che risultano ancora in corso non stanno lavorando.
+    try:
+        from . import cantiere
+        fermi = cantiere.riconcilia(conn)
+        if fermi:
+            print(f"lanci rimasti appesi e chiusi: {fermi}")
+    except Exception:
+        pass
     conn.close()
     if sync_first:
         start_sync(False)

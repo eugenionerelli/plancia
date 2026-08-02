@@ -142,6 +142,23 @@ def main():
           recap.solo_cache(conn, "it").get("testo") is None,
           "la cache tiene una lingua sola")
 
+    # ------------------------------------------------------------------ lanci
+    from plancia import cantiere  # noqa: E402
+    conn.execute("INSERT INTO runs(agente, modo, prompt, cwd, stato, inizio, pid) "
+                 "VALUES('claude','proposta','appeso','/tmp','in corso',?,999999)",
+                 (store.now(),))
+    conn.commit()
+    prova("un lancio appeso viene chiuso al riavvio", cantiere.riconcilia(conn) >= 1)
+    prova("e non resta in corso",
+          conn.execute("SELECT COUNT(*) FROM runs WHERE stato='in corso' "
+                       "AND prompt='appeso'").fetchone()[0] == 0)
+
+    conn.execute("INSERT INTO runs(agente, modo, prompt, cwd, stato, inizio) "
+                 "VALUES('claude','proposta','senza pid','/tmp','in coda',?)", (store.now(),))
+    conn.commit()
+    rid = conn.execute("SELECT id FROM runs WHERE prompt='senza pid'").fetchone()[0]
+    prova("si annulla anche un lancio senza processo", cantiere.annulla(conn, rid) is True)
+
     # ------------------------------------------------------------ comandi voce
     from plancia import jarvis as _j  # noqa: E402
     coppie = [("vai più veloce", "velocita"), ("parla più piano", "velocita"),
