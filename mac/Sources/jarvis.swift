@@ -217,7 +217,7 @@ final class AscoltoContinuo {
         DispatchQueue.main.asyncAfter(deadline: .now() + 10) {
             guard !risposto else { return }
             Log.write("jarvis: la finestra dei permessi non è comparsa")
-            rispondi(false, "Non riesco a chiederti i permessi. Apri Plancia dal Finder una volta, oppure autorizzala da Impostazioni di sistema.")
+            rispondi(false, "Non riesco a chiederti i permessi da qui. Usa Attiva la voce nel menu di Plancia, in alto a destra.")
         }
     }
 
@@ -396,12 +396,20 @@ final class AscoltoContinuo {
 
 // MARK: - il pannello
 
-final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate {
+/// Un pannello senza bordi non prende la tastiera, quindi il campo di testo
+/// dentro non riceverebbe niente. `becomesKeyOnlyIfNeeded` insieme a questo
+/// permette di scriverci senza che l'app rubi il fuoco a quella davanti.
+final class PannelloScrivibile: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
+
+final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate, NSTextFieldDelegate {
     private let orbita = Orbita()
     private let trascritto = NSTextField(labelWithString: "")
     private let risposta = NSTextField(wrappingLabelWithString: "")
     private let didascalia = NSTextField(labelWithString: "")
     private let ascolto = AscoltoContinuo()
+    private let campo = NSTextField()
     private var stato: StatoJarvis = .spento { didSet { orbita.stato = stato; aggiornaTesti() } }
     /// Il microfono si apre solo dopo che l'utente ha detto di sì una volta.
     /// Senza questo, riprendere l'ascolto da solo fa comparire la richiesta di
@@ -430,9 +438,10 @@ final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate {
     var onAzione: (([String: Any]) -> Void)?
 
     convenience init() {
-        let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 320, height: 360),
-                            styleMask: [.borderless, .nonactivatingPanel],
-                            backing: .buffered, defer: false)
+        let panel = PannelloScrivibile(contentRect: NSRect(x: 0, y: 0, width: 320, height: 400),
+                                       styleMask: [.borderless, .nonactivatingPanel],
+                                       backing: .buffered, defer: false)
+        panel.becomesKeyOnlyIfNeeded = true
         panel.isFloatingPanel = true
         panel.level = .floating
         panel.backgroundColor = .clear
@@ -502,7 +511,28 @@ final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate {
             risposta.topAnchor.constraint(equalTo: trascritto.bottomAnchor, constant: 12),
             risposta.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
             risposta.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
-            risposta.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -18),
+            risposta.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -54),
+        ])
+
+        // Il campo serve a due cose: lavorare lo stesso quando il microfono non
+        // è disponibile, e correggere una frase capita male senza doverla
+        // ripetere tutta a voce.
+        campo.placeholderString = ["it": "oppure scrivi", "en": "or type",
+                                   "es": "o escribe"][lingua] ?? "or type"
+        campo.font = .systemFont(ofSize: 12)
+        campo.bezelStyle = .roundedBezel
+        campo.focusRingType = .none
+        campo.delegate = self
+        campo.target = self
+        campo.action = #selector(scritto)
+        campo.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(campo)
+
+        NSLayoutConstraint.activate([
+            campo.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
+            campo.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
+            campo.topAnchor.constraint(greaterThanOrEqualTo: risposta.bottomAnchor, constant: 12),
+            campo.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -16),
         ])
 
         let click = NSClickGestureRecognizer(target: self, action: #selector(tocca))
@@ -538,8 +568,19 @@ final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate {
     }
 
     private func aggiornaTesti() {
+        // Quando c'è un avviso da leggere, non lo si copre con "premi per
+        // iniziare": chi non ha il microfono deve vedere cosa fare.
+        if stato == .spento && !risposta.stringValue.isEmpty { return }
         didascalia.stringValue = stato.didascalia(lingua)
         orbita.anima(stato != .spento)
+    }
+
+    @objc private func scritto() {
+        let frase = campo.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard frase.count > 1 else { return }
+        campo.stringValue = ""
+        ascolto.pausa()
+        manda(frase)
     }
 
     // --- ciclo ---
@@ -585,9 +626,9 @@ final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate {
     /// persona sta guardando da un'altra parte, ed è esattamente il momento in
     /// cui non deve restare in silenzio.
     private func spiegaPermessi() -> String {
-        let m = ["it": "Mi mancano i permessi per il microfono e la dettatura. Te li ho aperti nelle impostazioni: dai il consenso a Plancia e riapri con opzione spazio.",
-                 "en": "I am missing microphone and dictation permission. I opened the settings for you: allow Plancia there, then reopen with option space.",
-                 "es": "Me faltan los permisos de micrófono y dictado. Te he abierto los ajustes: autoriza Plancia y vuelve a abrir con opción espacio."]
+        let m = ["it": "Mi mancano i permessi per il microfono e la dettatura. Usa Attiva la voce nel menu di Plancia, in alto a destra. Intanto puoi scrivermi qui sotto.",
+                 "en": "I am missing microphone and dictation permission. Use Turn on the voice in the Plancia menu, top right. Meanwhile you can type below.",
+                 "es": "Me faltan los permisos de micrófono y dictado. Usa Activar la voz en el menú de Plancia, arriba a la derecha. Mientras tanto puedes escribir aquí abajo."]
         return m[lingua] ?? m["en"]!
     }
 
@@ -617,8 +658,13 @@ final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate {
                 self.stato = .spento
                 self.risposta.stringValue = messaggio
                 Log.write("jarvis: permessi negati: \(messaggio)")
+                // Senza microfono il pannello non diventa inutile: si scrive.
+                self.didascalia.stringValue = ["it": "senza microfono: scrivi qui sotto",
+                                               "en": "no microphone: type below",
+                                               "es": "sin micrófono: escribe abajo"][self.lingua] ?? ""
                 self.parla(self.spiegaPermessi(), poiAscolta: false)
                 self.mostraImpostazioni()
+                self.window?.makeFirstResponder(self.campo)
                 return
             }
             self.autorizzato = true
