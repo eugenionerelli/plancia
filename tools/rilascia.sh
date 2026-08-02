@@ -64,8 +64,10 @@ echo "==> compilo"
 mkdir -p "$FUORI"
 
 # 4. firma
+# Il `|| true` serve: senza certificati `grep` esce con 1, e con `set -e` la
+# release si fermava qui, subito dopo aver compilato e senza dire perché.
 CERT="${FIRMA:-$(security find-identity -v -p codesigning 2>/dev/null \
-  | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.*)"/\1/')}"
+  | grep "Developer ID Application" | head -1 | sed -E 's/.*"(.*)"/\1/' || true)}"
 
 if [ -n "$CERT" ]; then
   echo "==> firmo con: $CERT"
