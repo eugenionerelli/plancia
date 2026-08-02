@@ -115,6 +115,17 @@ def main():
           recap.solo_cache(conn, "it").get("testo") is None,
           "la cache tiene una lingua sola")
 
+    # ------------------------------------------------------------ comandi voce
+    from plancia import jarvis as _j  # noqa: E402
+    coppie = [("vai più veloce", "velocita"), ("parla più piano", "velocita"),
+              ("vai su progetti", "vai"), ("apri la lavagna", "vai"),
+              ("ripeti", "ripeti"), ("non ho capito", "ripeti"),
+              ("basta", "ferma"), ("annulla", "annulla"),
+              ("slow down", "velocita"), ("say that again", "ripeti")]
+    sbagliate = [f"{f} -> {_j.riconosci(f)[0]}" for f, atteso in coppie
+                 if _j.riconosci(f)[0] != atteso]
+    prova("i comandi vocali non si rubano la frase", not sbagliate, str(sbagliate))
+
     # ------------------------------------------------------- testo per la voce
     from plancia.voce_testo import per_voce  # noqa: E402
     prova("gli indirizzi non si leggono lettera per lettera",

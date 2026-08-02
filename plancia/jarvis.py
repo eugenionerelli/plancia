@@ -31,6 +31,13 @@ VISTE = {
 }
 
 MODELLI = {
+    # "Non ho capito" detto a una macchina vuol dire ripeti, non spiegami.
+    "ripeti": [r"^(?:ripeti|come(?: hai| ha)? detto|non ho (?:capito|sentito)|di nuovo)\b",
+               r"^(?:repeat|say (?:that )?again|what did you say|come again)\b",
+               r"^(?:repite|repítelo|c[oó]mo dices|otra vez)\b"],
+    "velocita": [r"^(?:parla |vai |più |piu )?(più|piu|meno) (piano|lento|lentamente|veloce|svelto|rapido)\b",
+                 r"^(?:slow(?:er)? down|speak slower|speed up|faster|slower)\b",
+                 r"^(?:m[aá]s (?:despacio|lento|r[aá]pido)|habla m[aá]s (?:despacio|r[aá]pido))\b"],
     "vai": [
         r"^(?:apri|apre|vai (?:a|su|in)|mostra(?:mi)?|portami (?:a|su))\s+(?:la |il |le |i |lo )?(.+?)[.?!]*$",
         r"^(?:open|go to|show me|show)\s+(?:the )?(.+?)[.?!]*$",
@@ -89,6 +96,9 @@ RISPOSTE = {
         "vai": "Apro {vista}.",
         "aggiorna": "Rileggo le fonti.",
         "ferma": "Va bene.",
+        "niente_da_ripetere": "Non ho ancora detto niente.",
+        "piu_piano": "Vado più piano.",
+        "piu_veloce": "Vado più svelto.",
         "niente_da_fermare": "Non c'è niente in corso da fermare.",
         "fermato": "Fermato. Lavori interrotti: {n}.",
         "task_add": "Segnato: {titolo}.",
@@ -108,6 +118,9 @@ RISPOSTE = {
         "vai": "Opening {vista}.",
         "aggiorna": "Re-reading the sources.",
         "ferma": "All right.",
+        "niente_da_ripetere": "I have not said anything yet.",
+        "piu_piano": "Slowing down.",
+        "piu_veloce": "Speeding up.",
         "niente_da_fermare": "There is nothing running to stop.",
         "fermato": "Stopped. Runs interrupted: {n}.",
         "task_add": "Noted: {titolo}.",
@@ -127,6 +140,9 @@ RISPOSTE = {
         "vai": "Abro {vista}.",
         "aggiorna": "Releo las fuentes.",
         "ferma": "Vale.",
+        "niente_da_ripetere": "Todavía no he dicho nada.",
+        "piu_piano": "Voy más despacio.",
+        "piu_veloce": "Voy más rápido.",
         "niente_da_fermare": "No hay nada en marcha que parar.",
         "fermato": "Parado. Trabajos interrumpidos: {n}.",
         "task_add": "Apuntado: {titolo}.",
@@ -278,6 +294,21 @@ def esegui(testo: str, lang=None, conn=None) -> dict:
         chiudi = True
     try:
         comando, arg = riconosci(testo)
+
+        if comando == "ripeti":
+            ultima = store.get_meta(conn, "ultima_risposta") or ""
+            if not ultima:
+                return {"tipo": "ripeti", "risposta": d["niente_da_ripetere"], "via": "comando"}
+            # Si rimanda lo stesso testo: chi non ha sentito vuole quello, non
+            # una riformulazione che lo confonde ancora di più.
+            return {"tipo": "ripeti", "risposta": ultima, "via": "comando", "ripetuta": True}
+
+        if comando == "velocita":
+            giu = bool(re.search(r"piano|lent|slow|despacio", testo, re.I))
+            passo = -0.06 if giu else 0.06
+            return {"tipo": "velocita",
+                    "risposta": d["piu_piano"] if giu else d["piu_veloce"],
+                    "azione": {"tipo": "velocita", "passo": passo}, "via": "comando"}
 
         if comando == "annulla":
             from . import cantiere

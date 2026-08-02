@@ -429,6 +429,13 @@ final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate, NSText
     /// tutto il giorno perché ti sei alzato senza dire niente.
     private var timerInattivita: Timer?
     private let inattivita: TimeInterval = 180
+    /// Quanto va svelta la voce. Si cambia dicendo "più piano" o "più veloce" e
+    /// resta com'era anche dopo aver chiuso, perché è una preferenza, non un
+    /// capriccio del momento.
+    private var velocita: Double {
+        get { (UserDefaults.standard.object(forKey: "velocitaVoce") as? Double) ?? 0.52 }
+        set { UserDefaults.standard.set(min(0.72, max(0.34, newValue)), forKey: "velocitaVoce") }
+    }
     /// La voce di sistema la fa l'app: aspettare che il server sintetizzi un
     /// file e lo rimandi indietro costa due secondi buoni a ogni risposta.
     private let sintetizzatore = AVSpeechSynthesizer()
@@ -611,7 +618,7 @@ final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate, NSText
         riprendeDopoAverParlato = poiAscolta
         let frase = AVSpeechUtterance(string: testo)
         frase.voice = vociSistema(lingua)
-        frase.rate = 0.52
+        frase.rate = Float(velocita)
         stato = .parlo
         sintetizzatore.speak(frase)
     }
@@ -838,7 +845,13 @@ final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate, NSText
             let perLaVoce = (j?["da_dire"] as? String) ?? testo
             self.risposta.stringValue = testo
             if let azione = j?["azione"] as? [String: Any] {
-                self.onAzione?(azione)
+                if (azione["tipo"] as? String) == "velocita",
+                   let passo = azione["passo"] as? Double {
+                    self.velocita = self.velocita + passo
+                    Log.write("jarvis: voce a \(self.velocita)")
+                } else {
+                    self.onAzione?(azione)
+                }
                 if (azione["tipo"] as? String) == "ferma" { return self.chiudi() }
             }
             if let file = j?["file"] as? String {

@@ -94,6 +94,10 @@ Quello che è cambiato sotto:
   stai ragionando ad alta voce.
 - **Gli errori si sentono.** A mani libere un messaggio scritto non esiste.
 - **"Annulla" ferma un lavoro partito**, "basta" chiude il pannello.
+- **"Ripeti"**, o "non ho capito", ridice l'ultima cosa uguale. Chi non ha
+  sentito vuole quella, non una riformulazione che confonde di più.
+- **"Più piano" e "più veloce"** cambiano la velocità della voce, e resta com'era
+  anche dopo aver chiuso.
 - **Quando un lancio finisce te lo dice**, anche se nel frattempo stavi facendo
   altro. Un agente che lavora tre minuti in silenzio ti riporta a guardare lo
   schermo, che è esattamente quello da evitare.
