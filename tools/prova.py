@@ -182,6 +182,17 @@ def main():
     prova("la punteggiatura della frase resta",
           per_voce("vedi github.com/a/b, poi torna", "it").endswith("poi torna")
           and "," in per_voce("vedi github.com/a/b, poi torna", "it"))
+    prova("l'em dash non arriva alla voce",
+          "—" not in per_voce("una cosa — e poi un'altra", "it"))
+    _lungo = ("Prima frase corta. Poi tutto un ragionamento che va avanti per righe "
+              "e righe senza fermarsi mai davvero, come succede quando uno scrive di getto")
+    _corto = recap._prima_frase(_lungo)
+    prova("un prossimo passo lunghissimo si accorcia",
+          len(_corto) <= 130 and len(_corto) < len(_lungo), f"{len(_corto)} caratteri")
+    prova("e non si taglia in mezzo a una parola",
+          _lungo.startswith(_corto) and not _corto.endswith(" "), _corto[-24:])
+    prova("un prossimo passo corto resta intero",
+          recap._prima_frase("annunciarlo su X") == "annunciarlo su X")
     prova("le date con le barre non diventano numeri",
           per_voce("la riunione è il 12/08/2026 alle nove", "it")
           == "la riunione è il 12/08/2026 alle nove")

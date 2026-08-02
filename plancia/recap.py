@@ -205,6 +205,24 @@ P["de"] = P["en"]
 P["pt"] = P["es"]
 
 
+def _prima_frase(testo: str, massimo: int = 130) -> str:
+    """Il prossimo passo detto a voce: una frase, non un paragrafo.
+
+    Un `next_action` può essere lungo quanto vuole, ed è giusto che lo sia:
+    dentro ci sta il ragionamento. Ma letto ad alta voce in mezzo al riepilogo
+    diventa un muro, e chi ascolta perde il filo di tutto il resto.
+    """
+    testo = " ".join((testo or "").split())
+    if len(testo) <= massimo:
+        return testo
+    taglio = testo[:massimo]
+    for segno in (". ", "; ", ": ", ", "):
+        i = taglio.rfind(segno)
+        if i > massimo // 3:
+            return taglio[:i].rstrip(" ,;:")
+    return taglio.rsplit(" ", 1)[0]
+
+
 def _elenco(items, lang) -> str:
     items = [i for i in items if i]
     if not items:
@@ -256,7 +274,8 @@ def render_template(dati: dict, lang: str) -> str:
         frasi.append(t["post"].format(n=len(dati["post_pubblicati"]), q=len(dati["post_coda"])))
     if dati["prossimi_passi"]:
         frasi.append(t["prossimi"].format(elenco=_elenco(
-            [f"{p['name']}, {p['next_action']}" for p in dati["prossimi_passi"][:2]], lang)))
+            [f"{p['name']}, {_prima_frase(p['next_action'])}"
+             for p in dati["prossimi_passi"][:2]], lang)))
     if dati["progetti_fermi"]:
         frasi.append(t["fermi"].format(elenco=_elenco(
             [p["name"] for p in dati["progetti_fermi"]], lang)))
@@ -359,7 +378,7 @@ def _compact(dati: dict) -> dict:
         "task_in_ritardo": [t["title"] for t in dati["task_scaduti"]],
         "post_pubblicati": [p["text"] for p in dati["post_pubblicati"]],
         "post_in_coda": len(dati["post_coda"]),
-        "prossimi_passi": [{"progetto": p["name"], "passo": p["next_action"]}
+        "prossimi_passi": [{"progetto": p["name"], "passo": _prima_frase(p["next_action"], 200)}
                            for p in dati["prossimi_passi"]],
         "progetti_fermi": [p["name"] for p in dati["progetti_fermi"]],
         "cosa_converrebbe_fare": [p["testo"] for p in dati.get("proposte", [])],

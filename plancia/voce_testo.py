@@ -63,6 +63,9 @@ def per_voce(testo: str, lang: str = "it") -> str:
     # Uno sha non si dice: la frase intorno dice già di quale commit si parla.
     testo = SHA.sub("", testo)
     testo = MARCATORI.sub("", testo)
+    # L'em dash: nella sua regola di stile non esiste, e detto a voce è solo una
+    # pausa che la virgola fa meglio.
+    testo = re.sub(r"\s*[—–]\s*", ", ", testo)
 
     # gli spazi e la punteggiatura rimasti orfani
     testo = re.sub(r"\(\s*\)", "", testo)
