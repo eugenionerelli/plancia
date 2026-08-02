@@ -14,7 +14,12 @@ from . import actions, briefing, cantiere, config, eventi, lavagna, recap, store
 
 PROTOCOL = "2025-06-18"
 SUPPORTED = {"2024-11-05", "2025-03-26", "2025-06-18"}
-VERSION = "1.0.0"
+# La versione la dice il pacchetto: tenerne una copia qui vuol dire tenerne una
+# copia sbagliata.
+try:
+    from . import __version__ as VERSION
+except Exception:
+    VERSION = "0"
 
 
 def err(msg: str) -> None:

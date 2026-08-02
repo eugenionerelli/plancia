@@ -365,6 +365,39 @@ def main():
 
     shutil.rmtree(casa, ignore_errors=True)
 
+    # ----------------------------------------------------------------- MCP
+    # E' la porta da cui entrano Claude e Codex: se non si apre, in ogni
+    # sessione i tool plancia_* spariscono senza dire niente.
+    def mcp_chiama(proc, metodo, params=None, id_=1):
+        proc.stdin.write(json.dumps({"jsonrpc": "2.0", "id": id_, "method": metodo,
+                                     "params": params or {}}) + "\n")
+        proc.stdin.flush()
+        riga = proc.stdout.readline()
+        return json.loads(riga) if riga.strip() else {}
+
+    server = subprocess.Popen([str(RADICE / "bin" / "plancia-mcp")], stdin=subprocess.PIPE,
+                              stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                              text=True, bufsize=1, env=os.environ)
+    try:
+        avvio = mcp_chiama(server, "initialize", {"protocolVersion": "2024-11-05",
+                                                  "capabilities": {}, "clientInfo":
+                                                  {"name": "prova", "version": "1"}})
+        prova("il server MCP si presenta",
+              avvio.get("result", {}).get("serverInfo", {}).get("name") == "plancia")
+        elenco_tool = [t["name"] for t in
+                       mcp_chiama(server, "tools/list", {}, 2).get("result", {}).get("tools", [])]
+        prova("espone i venti tool", len(elenco_tool) >= 20, str(len(elenco_tool)))
+        mancanti = [t for t in ("plancia_lavagna", "plancia_manda", "plancia_lanci",
+                                "plancia_eventi", "plancia_briefing")
+                    if t not in elenco_tool]
+        prova("ci sono anche quelli nuovi", not mancanti, str(mancanti))
+        risposta = mcp_chiama(server, "tools/call",
+                              {"name": "plancia_lavagna", "arguments": {}}, 3)
+        prova("un tool risponde davvero",
+              bool(risposta.get("result", {}).get("content")))
+    finally:
+        server.terminate()
+
     # ---------------------------------------------------------------- hook
     coda = casa_hook = Path(tempfile.mkdtemp(prefix="plancia-hook-"))
     amb = dict(os.environ, PLANCIA_HOME=str(casa_hook))
