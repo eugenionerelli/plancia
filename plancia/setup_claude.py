@@ -230,6 +230,10 @@ può agire davvero.
 
 `plancia jarvis "frase"` fa la stessa cosa da terminale, senza microfono.
 
+Tre strade in ordine: i comandi e le domande sui dati si risolvono in un decimo
+di secondo senza chiamare nessun modello; il resto va a un processo Claude tenuto
+caldo, circa tre secondi. Il riepilogo è precalcolato, quindi è immediato.
+
 ## I due agenti
 
 Plancia legge anche le sessioni di Codex da `~/.codex/sessions` e registra il
@@ -244,6 +248,8 @@ plancia recap --speak    # riepilogo letto ad alta voce
 plancia jarvis "..."     # un comando vocale scritto
 plancia ask "..." --speak
 plancia daily on 08:45   # riepilogo automatico ogni mattina
+plancia flusso           # da dove arrivano i dati e quanto sono freschi
+plancia sync --modo caldo   # solo sessioni e hook, un centesimo di secondo
 plancia serve --open     # dashboard
 plancia sync             # rilegge sessioni, memoria, repo
 plancia briefing         # il briefing su stdout

@@ -14,17 +14,18 @@ from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from . import actions, briefing, config, ingest, jarvis, recap, store, voice
+from . import actions, agente, briefing, config, ingest, jarvis, recap, store, voice
 
 SYNC_LOCK = threading.Lock()
 SYNC_STATE = {"running": False, "message": "", "started": None, "result": None}
 
 
-def _sync_worker(full=False):
+def _sync_worker(full=False, modo="tutto"):
     with SYNC_LOCK:
         SYNC_STATE.update(running=True, message="avvio", started=store.now(), result=None)
         try:
-            res = ingest.sync(full=full, progress=lambda m: SYNC_STATE.update(message=m))
+            res = ingest.sync(full=full, modo=modo,
+                              progress=lambda m: SYNC_STATE.update(message=m))
             SYNC_STATE.update(result=res, message="fatto")
         except Exception as exc:
             SYNC_STATE.update(message=f"errore: {exc}")
@@ -33,10 +34,10 @@ def _sync_worker(full=False):
             SYNC_STATE.update(running=False)
 
 
-def start_sync(full=False) -> bool:
+def start_sync(full=False, modo="tutto") -> bool:
     if SYNC_STATE["running"]:
         return False
-    threading.Thread(target=_sync_worker, args=(full,), daemon=True).start()
+    threading.Thread(target=_sync_worker, args=(full, modo), daemon=True).start()
     return True
 
 
@@ -332,6 +333,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/search":
                 return self._json(store.search(conn, first("q", ""), int(first("limit", 40))))
             if path == "/api/recap":
+                if first("solo_cache"):
+                    return self._json(recap.solo_cache(conn, first("lang")))
                 data = recap.build(conn, first("day"), first("lang"), first("engine"))
                 if first("compact"):
                     data.pop("dati", None)
@@ -372,6 +375,9 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/voice/stop" and method == "POST":
                 voice.ferma()
                 return self._json({"fermato": True})
+            if path == "/api/jarvis/scalda" and method == "POST":
+                agente.scalda(recap.lang_or_default(body.get("lang")))
+                return self._json({"scaldato": True})
             if path == "/api/jarvis" and method == "POST":
                 testo = (body.get("testo") or "").strip()
                 if not testo:
@@ -380,7 +386,13 @@ class Handler(BaseHTTPRequestHandler):
                 esito = jarvis.esegui(testo, lang, conn)
                 esito["lingua"] = lang
                 esito["detto"] = testo
-                if not esito.get("muto") and body.get("voce", True) and esito.get("risposta"):
+                # Se la voce sarebbe comunque quella di sistema, la sintesi la
+                # fa il chiamante: parlare parte subito invece di aspettare che
+                # il server scriva un file e lo rimandi indietro.
+                esito["motore"] = "voicebox" if voice.voicebox_vivo() else "say"
+                nativa = body.get("voce_nativa") and esito["motore"] == "say"
+                if not esito.get("muto") and body.get("voce", True) and \
+                        esito.get("risposta") and not nativa:
                     info = voice.sintesi(esito["risposta"], lang)
                     esito["url"] = "/audio/" + Path(info["file"]).name
                     esito["file"] = info["file"]
@@ -486,14 +498,23 @@ def serve(port=None, open_browser=False, sync_first=True) -> None:
     if sync_first:
         start_sync(False)
 
-    interval = int(cfg.get("sync_interval_minutes", 15))
-    if interval > 0:
-        def ticker():
-            import time
-            while True:
-                time.sleep(interval * 60)
-                start_sync(False)
-        threading.Thread(target=ticker, daemon=True).start()
+    # Due ritmi: il caldo costa un centesimo di secondo e tiene aggiornato
+    # quello che stai facendo, il freddo costa un secondo e rilegge il resto.
+    caldo = max(1, int(cfg.get("sync_caldo_minuti", 2)))
+    freddo = max(5, int(cfg.get("sync_freddo_minuti", 30)))
+
+    def ticker():
+        import time
+        passati = 0
+        while True:
+            time.sleep(caldo * 60)
+            passati += caldo
+            if passati >= freddo:
+                passati = 0
+                start_sync(False, "freddo")
+            else:
+                start_sync(False, "caldo")
+    threading.Thread(target=ticker, daemon=True).start()
 
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     url = f"http://127.0.0.1:{port}"

@@ -8,7 +8,7 @@ from . import briefing, store
 
 TASK_STATES = ["aperto", "in corso", "bloccato", "fatto", "archiviato"]
 POST_STATES = ["idea", "bozza", "approvato", "programmato", "pubblicato", "scartato"]
-PROJECT_STATES = ["attivo", "in pausa", "concluso", "idea"]
+PROJECT_STATES = ["attivo", "in pausa", "concluso", "idea", "archiviato"]
 
 
 class BadInput(ValueError):

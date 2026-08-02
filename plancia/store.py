@@ -267,11 +267,27 @@ def get_project(conn, ident):
     ).fetchone()
     if row:
         return row
-    return conn.execute(
+    riga = conn.execute(
         "SELECT * FROM projects WHERE key LIKE ? OR lower(name) LIKE lower(?) "
         "ORDER BY pinned DESC, last_activity DESC LIMIT 1",
         (f"%{slugify(str(ident))}%", f"%{ident}%"),
     ).fetchone()
+    if riga:
+        return riga
+    # Detto a voce arriva con gli articoli davanti ("il filmato ard"): si
+    # cercano le parole una per una invece della frase intera.
+    parole = [p for p in re.findall(r"\w{3,}", str(ident).lower())
+              if p not in ("il", "lo", "la", "gli", "the", "los", "las", "del", "progetto",
+                           "project", "proyecto")]
+    if not parole:
+        return None
+    migliore, punteggio = None, 0
+    for r in conn.execute("SELECT * FROM projects").fetchall():
+        testo = f"{r['key']} {r['name']}".lower()
+        n = sum(1 for p in parole if p in testo)
+        if n > punteggio:
+            migliore, punteggio = r, n
+    return migliore if punteggio else None
 
 
 def upsert_project(conn, key: str, name: str, **fields) -> int:

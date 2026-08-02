@@ -85,8 +85,6 @@ the answer is grounded in what actually happened, not in a guess.
 
 ## Jarvis
 
-![Agents](docs/agents.png)
-
 Hold nothing, press nothing. `⌥Space` anywhere, or `plancia://jarvis`, opens a
 panel that listens continuously and works out you have finished speaking from the
 silence, not from a key you keep held down.
@@ -110,7 +108,51 @@ hands-free mode. This is the other half: it speaks back, and it acts.
 Plancia reads Codex sessions from `~/.codex/sessions` alongside Claude Code's,
 and registers its own MCP server inside `~/.codex/config.toml`. Both agents see
 the same projects, the same tasks, the same sixteen tools. The Agents view shows
-who worked on what and when the two handed work to each other.
+who worked on what and when the two handed work to each other, inside the
+Archive.
+
+## Where the time goes
+
+Every `claude -p` costs about five seconds of startup before it even thinks. In a
+spoken conversation that is five seconds of silence per question. Plancia takes
+three routes, in this order:
+
+| route | when | cost |
+|---|---|---|
+| commands | open a view, note a task, close one, archive a project | 0.1 s |
+| data answers | how many tasks, what should I pick up, how much did I work | 0.1 s |
+| Claude, kept warm | anything else, with the `plancia_*` tools open | 2.7 s |
+
+The Claude process stays alive between questions instead of being restarted, so
+only the first one pays the startup, and the panel warms it up the moment you
+open it. The daily recap is precomputed at the end of every cold pass: asking for
+it costs 20 ms instead of ten seconds.
+
+## The data flow
+
+```
+sources ──▶ sync ──▶ SQLite ──▶ briefing.md · recap · REST · voice
+```
+
+Two rhythms, because reading twenty repos to find out you just opened a session
+is a waste:
+
+- **hot**, every two minutes, ~0.01 s: the hook queue and the new tail of the
+  transcripts. What you are doing right now.
+- **cold**, every thirty minutes, ~1.3 s: memory, skills, repos, local git,
+  project housekeeping, search index, recap.
+
+`plancia flusso` prints every source, where it comes from, which pass reads it
+and how fresh it is.
+
+## Projects end
+
+A project born from a folder you worked in once, three weeks ago, is not an
+active project: it is a memory. Plancia archives it on its own after two weeks
+if it has no repo, no memory note and fewer than three sessions. Anything you
+declared yourself is never touched. By voice: "archive the video project", or
+"the Ard footage is finished".
+
 
 ## Projects
 
@@ -154,6 +196,11 @@ web/                   dashboard, no framework, no build step
 Data lives in `~/.plancia/`: `plancia.db` (SQLite), `seed.json`, `token`,
 `briefing.md`, `audio/`. Keep it out of any synced folder: a SQLite file inside
 Dropbox or Drive will corrupt.
+
+## Four surfaces
+
+Today (the recap, the rhythm, the tasks), Projects, Social, Archive (sessions,
+agents, memory, skills). Everything else goes through ⌘K.
 
 ## Requirements
 

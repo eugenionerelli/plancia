@@ -85,8 +85,6 @@ la risposta sta su quello che è successo davvero e non su un'ipotesi.
 
 ## Jarvis
 
-![Agenti](docs/agents.png)
-
 Non tieni premuto niente. `⌥Spazio` da qualsiasi app, oppure `plancia://jarvis`,
 apre un pannello che ascolta di continuo e capisce dal silenzio che hai finito di
 parlare, non da un tasto tenuto giù.
@@ -111,7 +109,51 @@ agisce.
 Plancia legge le sessioni di Codex da `~/.codex/sessions` insieme a quelle di
 Claude Code, e registra il proprio server MCP dentro `~/.codex/config.toml`. I due
 agenti vedono gli stessi progetti, gli stessi task, gli stessi sedici tool. La
-vista Agenti mostra chi ha lavorato su cosa e quando si sono passati il lavoro.
+sezione Agenti dell'Archivio mostra chi ha lavorato su cosa e quando si sono
+passati il lavoro.
+
+## Dove se ne va il tempo
+
+Ogni `claude -p` costa cinque secondi di avvio prima ancora di pensare. In una
+conversazione a voce sono cinque secondi di silenzio a domanda. Plancia prende
+tre strade, in quest'ordine:
+
+| strada | quando | costo |
+|---|---|---|
+| comandi | apri una vista, segna un task, chiudilo, archivia un progetto | 0,1 s |
+| risposte dai dati | quanti task, cosa riprendo, quanto ho lavorato | 0,1 s |
+| Claude, tenuto caldo | tutto il resto, con i tool `plancia_*` aperti | 2,7 s |
+
+Il processo Claude resta vivo fra una domanda e l'altra invece di ripartire ogni
+volta, quindi solo la prima paga l'avvio, e il pannello lo scalda appena lo apri.
+Il riepilogo si prepara alla fine di ogni giro freddo: chiederlo costa 20
+millisecondi invece di dieci secondi.
+
+## Il flusso dei dati
+
+```
+fonti ──▶ sync ──▶ SQLite ──▶ briefing.md · riepilogo · REST · voce
+```
+
+Due ritmi, perché rileggere venti repo per sapere che hai appena aperto una
+sessione è tempo buttato:
+
+- **caldo**, ogni due minuti, ~0,01 s: la coda degli hook e la coda nuova dei
+  transcript. Quello che stai facendo adesso.
+- **freddo**, ogni trenta minuti, ~1,3 s: memoria, skill, repo, git locale,
+  manutenzione dei progetti, indice di ricerca, riepilogo.
+
+`plancia flusso` stampa ogni fonte, da dove arriva, quale giro la legge e quanto
+è fresca.
+
+## I progetti finiscono
+
+Un progetto nato da una cartella dove hai lavorato una volta tre settimane fa non
+è un progetto attivo: è un ricordo. Plancia lo archivia da solo dopo due
+settimane se non ha né un repo né un file di memoria e ha meno di tre sessioni.
+Quelli che hai dichiarato tu non li tocca mai. A voce: "archivia il progetto
+video", oppure "il filmato ard è finito".
+
 
 ## Progetti
 
@@ -156,6 +198,11 @@ web/                   dashboard, nessun framework, nessun build
 Dati in `~/.plancia/`: `plancia.db` (SQLite), `seed.json`, `token`,
 `briefing.md`, `audio/`. Tienili fuori da qualsiasi cartella sincronizzata: un
 file SQLite dentro Drive o Dropbox si corrompe.
+
+## Quattro superfici
+
+Oggi (il riepilogo, il ritmo, i task), Progetti, Social, Archivio (sessioni,
+agenti, memoria, capacità). Tutto il resto passa da ⌘K.
 
 ## Cosa serve
 

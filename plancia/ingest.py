@@ -706,27 +706,101 @@ def drain_queue(conn, progress=None) -> int:
 # orchestrazione
 # --------------------------------------------------------------------------
 
-def sync(full=False, progress=None, skip_git=False) -> dict:
+# Stessa soglia con cui un progetto verrebbe segnalato come fermo: invece di
+# dire che una cartella di passaggio è ferma, la si archivia.
+GIORNI_PRIMA_DI_ARCHIVIARE = 14
+
+
+def cura_progetti(conn, progress=None) -> int:
+    """Un progetto nato da una cartella dove hai lavorato una volta tre
+    settimane fa non è un progetto attivo: è un ricordo.
+
+    Senza questa regola l'elenco si riempie di cartelle di passaggio e il
+    riepilogo continua a segnalare come "fermo" qualcosa che è solo finito.
+    Si tocca solo quello che ha creato l'ingest da solo (auto=1) e che non ha
+    né un repo né un file di memoria: quelli li hai dichiarati tu.
+    """
+    limite = (datetime.now(timezone.utc) - timedelta(days=GIORNI_PRIMA_DI_ARCHIVIARE)
+              ).strftime("%Y-%m-%dT%H:%M:%SZ")
+    cur = conn.execute(
+        "UPDATE projects SET status='archiviato', updated_at=? "
+        "WHERE auto=1 AND hidden=0 AND status='attivo' "
+        "AND (last_activity IS NULL OR last_activity < ?) "
+        "AND id NOT IN (SELECT project_id FROM project_links WHERE kind IN ('repo','memory')) "
+        "AND (SELECT COUNT(*) FROM sessions s WHERE s.project_id=projects.id) <= 2",
+        (store.now(), limite))
+    if cur.rowcount:
+        log(f"progetti archiviati: {cur.rowcount}", progress)
+    conn.commit()
+    return cur.rowcount
+
+
+def sync(full=False, progress=None, skip_git=False, modo="tutto") -> dict:
+    """Le fonti, lette in due giri diversi.
+
+    Caldo: la coda degli hook e la coda nuova dei transcript. Sono pochi byte,
+    costa meno di un secondo e tiene aggiornato quello che stai facendo adesso.
+
+    Freddo: memoria, skill, repo, git, archiviazione dei progetti e indice di
+    ricerca. Cambiano poche volte al giorno e costano qualche secondo.
+
+    Prima erano un giro solo, e per sapere se avevi appena aperto una sessione
+    si pagava anche la lettura di venti repo.
+    """
     conn = store.connect()
     store.init_db(conn)
-    started = store.now()
+    inizio = store.now()
     result = {}
-    keywords = sync_seed(conn, progress)
-    result["memoria"] = sync_memory(conn, progress)
-    result["capacita"] = sync_capabilities(conn, progress)
-    result["hook"] = drain_queue(conn, progress)
-    result["sessioni"] = sync_sessions(conn, keywords, progress, full=full)
-    from . import codex
-    result["codex"] = codex.sync(conn, keywords, progress, full=full)
-    if not skip_git:
-        result["repo"] = sync_repos(conn, progress)
-        result["git_locali"] = sync_local_git(conn, progress)
-    log("indice di ricerca", progress)
-    store.rebuild_search(conn)
-    store.set_meta(conn, "last_sync", started)
+    caldo = modo in ("tutto", "caldo")
+    freddo = modo in ("tutto", "freddo")
+
+    keywords = sync_seed(conn, progress) if freddo else raccogli_keywords(conn)
+
+    if caldo:
+        result["hook"] = drain_queue(conn, progress)
+        result["sessioni"] = sync_sessions(conn, keywords, progress, full=full)
+        from . import codex
+        result["codex"] = codex.sync(conn, keywords, progress, full=full)
+
+    if freddo:
+        result["memoria"] = sync_memory(conn, progress)
+        result["capacita"] = sync_capabilities(conn, progress)
+        if not skip_git:
+            result["repo"] = sync_repos(conn, progress)
+            result["git_locali"] = sync_local_git(conn, progress)
+        result["archiviati"] = cura_progetti(conn, progress)
+        log("indice di ricerca", progress)
+        store.rebuild_search(conn)
+
+    store.set_meta(conn, "last_sync", inizio)
     store.set_meta(conn, "last_sync_end", store.now())
+    store.set_meta(conn, f"last_sync_{modo}", store.now())
     conn.commit()
     conn.close()
     from . import briefing
     briefing.write_cache()
+    if freddo:
+        # il riepilogo si prepara qui, in un filo a parte: quando lo chiedi
+        # dev'esserci già
+        import threading
+        from . import recap as _recap
+        threading.Thread(target=lambda: _recap.prepara(), daemon=True).start()
     return result
+
+
+def raccogli_keywords(conn) -> dict:
+    """Le parole chiave dal seed, senza riscrivere i progetti.
+
+    Il giro caldo ha bisogno di indovinare il progetto di una sessione, ma non
+    di rifare l'anagrafe.
+    """
+    seed = load_seed()
+    fuori = {}
+    for spec in seed.get("projects", []):
+        if not spec.get("keywords"):
+            continue
+        riga = conn.execute("SELECT id FROM projects WHERE key=?",
+                            (store.slugify(spec["key"]),)).fetchone()
+        if riga:
+            fuori[riga["id"]] = spec["keywords"]
+    return fuori

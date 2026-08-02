@@ -13,6 +13,8 @@ from datetime import datetime, timedelta, timezone
 
 from . import config, store
 
+SOSTANZA = ("AND ((SELECT COUNT(*) FROM sessions s WHERE s.project_id=p.id) >= 3 OR p.id IN (SELECT project_id FROM project_links WHERE kind IN ('repo','memory')))")
+
 LANGS = ["it", "en", "es", "fr", "de", "pt"]
 DEFAULT_LANG = "it"
 
@@ -84,9 +86,9 @@ def collect(conn, day: str = None) -> dict:
         "WHERE status='attivo' AND hidden=0 AND next_action <> '' "
         "ORDER BY priority ASC, last_activity DESC LIMIT 5")
     fermi = rows(
-        "SELECT name, key, last_activity FROM projects WHERE status='attivo' AND hidden=0 "
-        "AND last_activity IS NOT NULL AND last_activity < ? "
-        "ORDER BY last_activity ASC LIMIT 3",
+        "SELECT p.name, p.key, p.last_activity FROM projects p WHERE p.status='attivo' "
+        "AND p.hidden=0 AND p.last_activity IS NOT NULL AND p.last_activity < ? "
+        + SOSTANZA + " ORDER BY p.last_activity ASC LIMIT 3",
         ((datetime.now(timezone.utc) - timedelta(days=14)).strftime("%Y-%m-%dT%H:%M:%SZ"),))
 
     per_progetto = {}
@@ -358,7 +360,71 @@ def _compact(dati: dict) -> dict:
     }
 
 
-def build(conn=None, day=None, lang=None, engine=None, parole=140) -> dict:
+def impronta(conn, giorno: str) -> str:
+    """Una firma corta di com'è messa la giornata.
+
+    Se non è cambiata, il riepilogo di prima vale ancora e non serve
+    rigenerarlo: sono otto secondi e una chiamata a un modello risparmiati ogni
+    volta che lo richiedi.
+    """
+    r = conn.execute(
+        "SELECT (SELECT COUNT(*) FROM sessions WHERE substr(started_at,1,10)=?) "
+        "|| '-' || (SELECT COUNT(*) FROM commits WHERE substr(date,1,10)=?) "
+        "|| '-' || (SELECT COALESCE(MAX(updated_at),'') FROM tasks) "
+        "|| '-' || (SELECT COUNT(*) FROM tasks WHERE status IN ('aperto','in corso','bloccato')) "
+        "|| '-' || (SELECT COALESCE(MAX(updated_at),'') FROM posts)",
+        (giorno, giorno)).fetchone()[0]
+    return str(r)
+
+
+def solo_cache(conn, lang=None) -> dict:
+    """Il riepilogo già pronto, o niente. Non genera: serve a dipingere subito
+    la pagina senza aspettare un modello."""
+    lang = lang_or_default(lang)
+    giorno = _bounds()[2]
+    firma = impronta(conn, giorno)
+    fresco = store.get_meta(conn, "recap_impronta") == f"{firma}|{lang}|{giorno}"
+    testo = store.get_meta(conn, "recap_testo")
+    # Anche quando la giornata è cambiata si restituisce l'ultimo testo: meglio
+    # un riepilogo di venti minuti fa, subito, che un riquadro vuoto per dieci
+    # secondi. Chi chiama lo aggiorna in sottofondo.
+    return {"giorno": giorno, "lingua": lang, "testo": testo if testo else None,
+            "fonte": store.get_meta(conn, "recap_fonte", "cache"),
+            "fresco": bool(fresco and testo), "da_cache": True}
+
+
+def prepara(lang=None, min_minuti=20) -> bool:
+    """Rigenera il riepilogo se è vecchio o se la giornata è cambiata.
+
+    Si chiama alla fine del giro freddo: così quando lo chiedi, a voce o a
+    schermo, c'è già e non aspetti otto secondi.
+    """
+    from datetime import datetime as _dt
+    conn = store.connect()
+    store.init_db(conn)
+    try:
+        lang = lang_or_default(lang)
+        pronto = solo_cache(conn, lang)
+        if pronto["testo"]:
+            return False
+        ultimo = store.get_meta(conn, "recap_ts")
+        if ultimo:
+            try:
+                scarto = (_dt.now(timezone.utc) - _dt.strptime(
+                    ultimo, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)).total_seconds()
+                if scarto < min_minuti * 60:
+                    return False
+            except ValueError:
+                pass
+        build(conn, lang=lang, cache=False)
+        store.set_meta(conn, "recap_ts", store.now())
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def build(conn=None, day=None, lang=None, engine=None, parole=140, cache=True) -> dict:
     close = False
     if conn is None:
         conn = store.connect()
@@ -367,6 +433,13 @@ def build(conn=None, day=None, lang=None, engine=None, parole=140) -> dict:
     try:
         lang = lang_or_default(lang)
         dati = collect(conn, day)
+        firma = impronta(conn, dati["giorno"])
+        if cache and store.get_meta(conn, "recap_impronta") == f"{firma}|{lang}|{dati['giorno']}":
+            testo = store.get_meta(conn, "recap_testo")
+            if testo:
+                return {"giorno": dati["giorno"], "lingua": lang,
+                        "fonte": store.get_meta(conn, "recap_fonte", "cache"),
+                        "testo": testo, "dati": dati, "da_cache": True}
         engine = engine or config.load_config().get("motore_riepilogo", "claude")
         testo, fonte = "", "modello"
         if engine == "claude":
@@ -377,8 +450,12 @@ def build(conn=None, day=None, lang=None, engine=None, parole=140) -> dict:
                 fonte = "claude"
         if not testo:
             testo = render_template(dati, lang)
+        store.set_meta(conn, "recap_impronta", f"{firma}|{lang}|{dati['giorno']}")
+        store.set_meta(conn, "recap_testo", testo)
+        store.set_meta(conn, "recap_fonte", fonte)
+        conn.commit()
         return {"giorno": dati["giorno"], "lingua": lang, "fonte": fonte,
-                "testo": testo, "dati": dati}
+                "testo": testo, "dati": dati, "da_cache": False}
     finally:
         if close:
             conn.close()

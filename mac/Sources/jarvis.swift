@@ -10,6 +10,7 @@ import AppKit
 import AVFoundation
 import Carbon.HIToolbox
 import Speech
+import AVFoundation
 
 // MARK: - stato
 
@@ -218,7 +219,7 @@ final class AscoltoContinuo {
 
 // MARK: - il pannello
 
-final class JarvisPanel: NSWindowController {
+final class JarvisPanel: NSWindowController, AVSpeechSynthesizerDelegate {
     private let orbita = Orbita()
     private let trascritto = NSTextField(labelWithString: "")
     private let risposta = NSTextField(wrappingLabelWithString: "")
@@ -230,6 +231,9 @@ final class JarvisPanel: NSWindowController {
     /// sistema in un momento qualsiasi e l'app resta ferma ad aspettarla.
     private var autorizzato = false
     private var soloTesto = false
+    /// La voce di sistema la fa l'app: aspettare che il server sintetizzi un
+    /// file e lo rimandi indietro costa due secondi buoni a ogni risposta.
+    private let sintetizzatore = AVSpeechSynthesizer()
     private var lingua: String { Conf.lang }
 
     /// Azioni che il pannello non sa eseguire da solo: navigare, sincronizzare.
@@ -323,6 +327,7 @@ final class JarvisPanel: NSWindowController {
             self?.risposta.stringValue = e
         }
         ascolto.onFrase = { [weak self] frase in self?.manda(frase) }
+        sintetizzatore.delegate = self
         Player.shared.onFinish = { [weak self] in
             guard let self = self, self.window?.isVisible == true else { return }
             self.riprendiAscolto()
@@ -343,7 +348,26 @@ final class JarvisPanel: NSWindowController {
     func apri() {
         posiziona()
         window?.orderFrontRegardless()
+        // Il primo turno paga l'avvio del processo Claude: lo si fa partire
+        // adesso, mentre l'utente sta ancora aprendo la bocca.
+        API.request("/api/jarvis/scalda", method: "POST",
+                    body: ["lang": lingua], timeout: 20) { _, _ in }
         if stato == .spento { avvia() }
+    }
+
+    private func vociSistema(_ lang: String) -> AVSpeechSynthesisVoice? {
+        let codice = ["it": "it-IT", "en": "en-US", "es": "es-ES",
+                      "fr": "fr-FR", "de": "de-DE", "pt": "pt-BR"][lang] ?? "en-US"
+        return AVSpeechSynthesisVoice(language: codice)
+    }
+
+    private func parla(_ testo: String) {
+        sintetizzatore.stopSpeaking(at: .immediate)
+        let frase = AVSpeechUtterance(string: testo)
+        frase.voice = vociSistema(lingua)
+        frase.rate = 0.52
+        stato = .parlo
+        sintetizzatore.speak(frase)
     }
 
     private func posiziona() {
@@ -373,6 +397,7 @@ final class JarvisPanel: NSWindowController {
 
     func sospendi() {
         ascolto.ferma()
+        sintetizzatore.stopSpeaking(at: .immediate)
         Player.shared.stop()
         stato = .spento
         trascritto.stringValue = ""
@@ -419,7 +444,8 @@ final class JarvisPanel: NSWindowController {
         trascritto.stringValue = frase
         Log.write("jarvis: \"\(frase)\"")
         API.request("/api/jarvis", method: "POST",
-                    body: ["testo": frase, "lang": lingua, "voce": true]) { [weak self] j, err in
+                    body: ["testo": frase, "lang": lingua, "voce": true,
+                           "voce_nativa": true]) { [weak self] j, err in
             guard let self = self else { return }
             if let err = err {
                 self.risposta.stringValue = err
@@ -436,10 +462,17 @@ final class JarvisPanel: NSWindowController {
             if let file = j?["file"] as? String {
                 self.stato = .parlo
                 Player.shared.play(path: file)
+            } else if !testo.isEmpty {
+                self.parla(testo)
             } else {
                 self.riprendiAscolto()
             }
         }
+    }
+
+    func speechSynthesizer(_ s: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        guard window?.isVisible == true else { return }
+        riprendiAscolto()
     }
 
     override func keyDown(with event: NSEvent) {

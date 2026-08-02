@@ -12,7 +12,7 @@ indovinare, si passa a Claude.
 
 import re
 
-from . import actions, recap, store
+from . import actions, agente, recap, risposte, store
 
 # --------------------------------------------------------------------------
 # comandi riconosciuti al volo
@@ -52,6 +52,16 @@ MODELLI = {
         r"^(?:remind me to|add (?:a )?task|new task|note that)\s+(.+?)[.?!]*$",
         r"^(?:recu[eé]rdame|a[ñn]ade (?:una )?tarea|nueva tarea)\s+(.+?)[.?!]*$",
     ],
+    "archivia": [
+        r"^(?:archivia|chiudi il progetto|(?:ho )?finito con|metti via)\s+(.+?)[.?!]*$",
+        r"^(.+?)\s+(?:è|e) (?:finito|finita|concluso|conclusa|chiuso|chiusa)[.?!]*$",
+        r"^(?:archive|close the project|done with)\s+(.+?)[.?!]*$",
+        r"^(?:archiva|cierra el proyecto|he terminado con)\s+(.+?)[.?!]*$",
+    ],
+    "riapri_progetto": [
+        r"^(?:riapri|riattiva) (?:il progetto )?(.+?)[.?!]*$",
+        r"^(?:reopen|reactivate) (?:the project )?(.+?)[.?!]*$",
+    ],
     "task_done": [
         r"^(?:ho fatto|fatto|chiudi (?:il )?task|segna(?:lo)? (?:come )?fatto)\s*(.*?)[.?!]*$",
         r"^(?:done|i did|close (?:the )?task|mark (?:it )?done)\s*(.*?)[.?!]*$",
@@ -67,6 +77,9 @@ RISPOSTE = {
         "task_add": "Segnato: {titolo}.",
         "task_done": "Chiuso: {titolo}.",
         "task_non_trovato": "Non trovo un task aperto che assomigli a {titolo}.",
+        "archiviato": "Archiviato {nome}. Non lo segnalo più.",
+        "riaperto": "{nome} torna attivo.",
+        "progetto_non_trovato": "Non trovo un progetto che si chiami {nome}.",
         "nessun_task": "Non hai task aperti.",
         "non_capito": "Non ho capito.",
     },
@@ -77,6 +90,9 @@ RISPOSTE = {
         "task_add": "Noted: {titolo}.",
         "task_done": "Closed: {titolo}.",
         "task_non_trovato": "I cannot find an open task like {titolo}.",
+        "archiviato": "Archived {nome}. I will stop bringing it up.",
+        "riaperto": "{nome} is active again.",
+        "progetto_non_trovato": "I cannot find a project called {nome}.",
         "nessun_task": "You have no open tasks.",
         "non_capito": "I did not catch that.",
     },
@@ -87,6 +103,9 @@ RISPOSTE = {
         "task_add": "Apuntado: {titolo}.",
         "task_done": "Cerrado: {titolo}.",
         "task_non_trovato": "No encuentro una tarea abierta parecida a {titolo}.",
+        "archiviato": "Archivado {nome}. No lo vuelvo a mencionar.",
+        "riaperto": "{nome} vuelve a estar activo.",
+        "progetto_non_trovato": "No encuentro un proyecto que se llame {nome}.",
         "nessun_task": "No tienes tareas abiertas.",
         "non_capito": "No te he entendido.",
     },
@@ -201,6 +220,17 @@ def esegui(testo: str, lang=None, conn=None) -> dict:
                 return {"tipo": "vai", "risposta": d["vai"].format(vista=riga["name"]),
                         "azione": {"tipo": "progetto", "chiave": riga["key"]}}
 
+        if comando in ("archivia", "riapri_progetto") and arg:
+            riga = store.get_project(conn, arg)
+            if not riga:
+                return {"tipo": "progetto",
+                        "risposta": d["progetto_non_trovato"].format(nome=arg)}
+            nuovo = "archiviato" if comando == "archivia" else "attivo"
+            actions.project_update(conn, riga["key"], status=nuovo)
+            chiave = "archiviato" if nuovo == "archiviato" else "riaperto"
+            return {"tipo": "progetto", "risposta": d[chiave].format(nome=riga["name"]),
+                    "azione": {"tipo": "vai", "vista": "progetti"}}
+
         if comando == "aggiorna":
             return {"tipo": "aggiorna", "risposta": d["aggiorna"],
                     "azione": {"tipo": "aggiorna"}}
@@ -238,7 +268,16 @@ def esegui(testo: str, lang=None, conn=None) -> dict:
             return {"tipo": "task", "risposta": d["task_done"].format(titolo=scelto["title"]),
                     "azione": {"tipo": "vai", "vista": "task"}}
 
-        risposta = chiedi_a_claude(testo, lang)
+        # Prima di scomodare un modello: la domanda è una di quelle che i dati
+        # sanno già? Costa zero e risponde in un decimo di secondo.
+        locale = risposte.prova(conn, testo, lang)
+        if locale:
+            return {"tipo": "dati", "risposta": locale}
+
+        risposta = agente.chiedi(testo, lang)
+        if not risposta:
+            # il processo caldo non è partito: si ripiega su quello a freddo
+            risposta = chiedi_a_claude(testo, lang)
         return {"tipo": "claude", "risposta": risposta or d["non_capito"]}
     finally:
         if chiudi:

@@ -43,7 +43,7 @@ const EN = {
   'conversazioni con Claude Code': 'conversations with Claude Code',
   'cerca nel primo messaggio…': 'search the opening message…',
   'tutti i progetti': 'all projects', 'quando': 'when', 'di cosa': 'about',
-  'progetto': 'project', 'scambi': 'turns', 'tool': 'tools', 'riprendi': 'resume',
+  'progetto': 'project', 'tool': 'tools', 'riprendi': 'resume',
   'nessuna sessione': 'no sessions', 'senza titolo': 'untitled',
   'memorie indicizzate da Claude': 'memory notes indexed by Claude',
   'cosa sa fare il tuo Claude Code': 'what your Claude Code can do',
@@ -83,6 +83,7 @@ const EN = {
   'ricerca': 'research', 'personale': 'personal', 'metodo': 'method',
   'sessione aperta': 'session opened', 'sessione chiusa': 'session closed',
   'Agenti': 'Agents', 'scambio': 'handoff', 'scambi': 'handoffs',
+  'Archivio': 'Archive', 'turni': 'turns', "tutto quello che è già successo": 'everything that already happened',
   'i due agenti sullo stesso archivio': 'both agents, one archive',
   'sessioni tue': 'your turns', 'token generati': 'tokens out',
   'chiamate a tool': 'tool calls', 'primo lavoro': 'first seen',
@@ -206,6 +207,7 @@ const views = {};
 
 views.oggi = async () => {
   const d = state.overview = await api('/api/overview');
+  const riepilogo = await bloccoRiepilogo(true);
   const s = d.stats;
   const attivi = d.progetti.filter((p) => p.status === 'attivo');
   const oggi = d.attivita[d.attivita.length - 1] || { claude: 0, codex: 0, commit: 0 };
@@ -220,7 +222,9 @@ views.oggi = async () => {
     <p>${T('aggiornato ')}${ago(d.ultimo_sync)}</p>
   </div>
 
-  <div class="bento" data-in="1">
+  <div data-in="1" style="margin-bottom:var(--s3)">${riepilogo}</div>
+
+  <div class="bento" data-in="2">
     <div class="cell tall wide" style="justify-content:flex-start">
       <div class="k">${T('Ritmo · 30 giorni')}</div>
       ${nastro(d.attivita)}
@@ -232,7 +236,7 @@ views.oggi = async () => {
     ${cella(kilo(s.token_out_mese), T('token 30 giorni'), 'quiet')}
   </div>
 
-  <div class="bento" data-in="2" style="grid-template-columns:repeat(4,1fr)">
+  <div class="bento" data-in="3" style="grid-template-columns:repeat(4,1fr)">
     ${agenteCella('claude', agenti.claude)}
     ${agenteCella('codex', agenti.codex)}
     ${cella(s.scambi || 0, T('sessioni con scambi'), s.scambi ? 'nominal' : 'quiet',
@@ -241,11 +245,11 @@ views.oggi = async () => {
        s.post_pubblicati ? `${s.post_pubblicati} ${T('pubblicati')}` : '')}
   </div>
 
-  <div class="grid cols-2" data-in="3">
+  <div class="grid cols-2" data-in="4">
     <div style="display:flex;flex-direction:column;gap:var(--s3)">
       <div class="panel">
         <header><h3>${T('Task aperti')}</h3><span class="spacer"></span>
-          <a class="mini" href="#/task">${T('tutti')}</a></header>
+          <button class="mini" data-act="task-tutti">${T('tutti')}</button></header>
         <form class="inline-form" data-form="task-quick">
           <input type="text" name="title" placeholder="${T('Aggiungi un task e premi invio')}" autocomplete="off">
           <select name="project" style="width:150px">
@@ -279,7 +283,7 @@ views.oggi = async () => {
     <div style="display:flex;flex-direction:column;gap:var(--s3)">
       <div class="panel">
         <header><h3>${T('Attività recente')}</h3><span class="spacer"></span>
-          <a class="mini" href="#/sessioni">${T('sessioni')}</a></header>
+          <a class="mini" href="#/archivio">${T('sessioni')}</a></header>
         <div class="panel-body"><div class="tl">${timeline(d.eventi.slice(0, 20))}</div></div>
       </div>
       ${coda.length ? `
@@ -385,7 +389,7 @@ const SUGGERIMENTI = {
   es: ['¿Qué debería retomar ahora?', '¿Qué hice ayer?', '¿Qué lleva parado demasiado?', '¿Cuánto he trabajado esta semana?'],
 };
 
-views.riepilogo = async () => {
+async function bloccoRiepilogo(soloCorpo) {
   const r = state.recap || (state.recap = { lang: '', data: null, qa: [], voce: null });
   if (!r.lang) {
     try { r.lang = (await api('/api/voice/status')).lingua || UILANG; }
@@ -395,20 +399,25 @@ views.riepilogo = async () => {
   const attiva = r.lang || 'it';
   const d = r.data;
 
-  setTimeout(() => { if (!state.recap.data && !state.recap.inCorso) generaRecap(); }, 60);
+  // Se c'è in cache si dipinge subito; altrimenti si genera in sottofondo.
+  let daRinfrescare = false;
+  if (!r.data) {
+    try {
+      const pronto = await api('/api/recap?solo_cache=1&lang=' + (r.lang || ''));
+      if (pronto && pronto.testo) { r.data = pronto; r.audio = null; }
+      daRinfrescare = !pronto || !pronto.fresco;
+    } catch (e) { daRinfrescare = true; }
+  }
+  if (daRinfrescare) setTimeout(() => { if (!state.recap.inCorso) generaRecap(); }, 60);
 
   return `
-  <div class="view-head">
+  ${soloCorpo ? '' : `<div class="view-head">
     <h1>${T('Riepilogo')}</h1><p>${T('la tua giornata, raccontata come la diresti a voce')}</p>
-    <span class="spacer"></span>
-    <select id="recap-lang" style="width:96px">${lingue.map((l) =>
-      `<option value="${l}" ${l === attiva ? 'selected' : ''}>${l}</option>`).join('')}</select>
-    <button class="ghost" data-act="recap-gen">${T('Rigenera')}</button>
-  </div>
+  </div>`}
 
   <div class="recap">
     <div class="panel">
-      <header><h3>${d ? esc(d.giorno) : 'Oggi'}</h3><span class="spacer"></span>
+      <header><h3>${T('Riepilogo')}</h3><span class="spacer"></span>
         ${d ? `<span class="tag ${d.fonte === 'claude' ? 'accent' : ''}">${esc(d.fonte)}</span>` : ''}
       </header>
       <div class="panel-body">
@@ -446,14 +455,17 @@ async function generaRecap(rigenera) {
   if (r.inCorso) return;
   r.inCorso = true;
   const box = $('#recap-testo');
-  if (box) { box.classList.add('attesa'); box.textContent = T('preparo il riepilogo…'); }
+  if (box && !box.textContent.trim()) {
+    box.classList.add('attesa');
+    box.textContent = T('preparo il riepilogo…');
+  }
   try {
     const lang = ($('#recap-lang') || {}).value || r.lang || 'it';
     r.lang = lang;
     const d = await api('/api/recap', { method: 'POST', body: { lang, voce: true } });
     r.data = d; r.voce = d.motore || null; r.audio = d.url || null;
     r.inCorso = false;
-    if (state.view === 'riepilogo') await route();
+    if (state.view === 'oggi') await route();
     if (rigenera) toast(T('riepilogo aggiornato'));
   } catch (err) {
     r.inCorso = false;
@@ -515,7 +527,7 @@ function raggruppa(scambi) {
   return [...per.values()].sort((a, b) => (a.ts < b.ts ? 1 : -1));
 }
 
-views.agenti = async () => {
+async function bloccoAgenti(soloCorpo) {
   const d = await api('/api/agents');
   const per = Object.fromEntries(d.totali.map((a) => [a.agente, a]));
   const scheda = (nome) => {
@@ -544,11 +556,11 @@ views.agenti = async () => {
   const elenco = Object.entries(giorni).sort().slice(-30);
 
   return `
-  <div class="view-head">
+  ${soloCorpo ? '' : `<div class="view-head">
     <h1>${T('Agenti')}</h1><p>${T('i due agenti sullo stesso archivio')}</p>
     <span class="spacer"></span>
     <span class="tag ${d.codex.mcp ? 'ok' : 'warn'}">${d.codex.mcp ? '16 ' + T('tool condivisi') : 'MCP ' + T('Codex non è collegato')}</span>
-  </div>
+  </div>`}
 
   <div class="duel" data-in="1">${scheda('claude')}${scheda('codex')}</div>
 
@@ -610,6 +622,29 @@ views.agenti = async () => {
   </div>`;
 };
 
+
+/* ---------------------------------------------------------------- archivio */
+const SEGMENTI = [['sessioni', 'Sessioni'], ['agenti', 'Agenti'],
+                  ['memoria', 'Conoscenza'], ['capacita', 'Capacità']];
+
+views.archivio = async () => {
+  const f = state.filters.archivio || (state.filters.archivio = { seg: 'sessioni' });
+  const corpo = f.seg === 'agenti' ? await bloccoAgenti(true)
+    : f.seg === 'memoria' ? await bloccoConoscenza(true)
+    : f.seg === 'capacita' ? await bloccoCapacita(true)
+    : await bloccoSessioni(true);
+  return `
+  <div class="view-head">
+    <h1>${T('Archivio')}</h1><p>${T('tutto quello che è già successo')}</p>
+    <span class="spacer"></span>
+    <div class="filters" style="margin:0">
+      ${SEGMENTI.map(([k, etichetta]) =>
+        `<span class="chip ${f.seg === k ? 'on' : ''}" data-filter="archivio.seg" data-value="${k}">${T(etichetta)}</span>`).join('')}
+    </div>
+  </div>
+  <div data-in="1">${corpo}</div>`;
+};
+
 views.progetti = async () => {
   const list = state.overview ? state.overview.progetti : (await api('/api/overview')).progetti;
   const groups = [['attivo', T('attivo')], ['idea', T('idea')], ['in pausa', T('in pausa')], ['concluso', T('concluso')]];
@@ -640,14 +675,14 @@ const projectCard = (p) => `
     </div>
   </div>`;
 
-views.task = async () => {
+async function bloccoTask(soloCorpo) {
   const f = state.filters.task || (state.filters.task = { status: 'aperti', project: '' });
   const [tasks, projects] = await Promise.all([
     api(`/api/tasks?status=${encodeURIComponent(f.status)}${f.project ? '&project=' + encodeURIComponent(f.project) : ''}`),
     api('/api/projects'),
   ]);
   return `
-  <div class="view-head"><h1>${T('Task')}</h1><p>${tasks.length} ${T('in elenco')}</p></div>
+  ${soloCorpo ? '' : `<div class="view-head"><h1>${T('Task')}</h1><p>${tasks.length} ${T('in elenco')}</p></div>`}
   <div class="filters">
     ${['aperti', 'in corso', 'bloccato', 'fatto', 'tutti'].map((s) =>
       `<span class="chip ${f.status === s ? 'on' : ''}" data-filter="task.status" data-value="${s}">${T(s)}</span>`).join('')}
@@ -721,14 +756,14 @@ views.social = async () => {
   </div>`;
 };
 
-views.sessioni = async () => {
+async function bloccoSessioni(soloCorpo) {
   const f = state.filters.sessioni || (state.filters.sessioni = { q: '', project: '', agent: '' });
   const [rows, projects] = await Promise.all([
     api(`/api/sessions?limit=150${f.q ? '&q=' + encodeURIComponent(f.q) : ''}${f.project ? '&project=' + encodeURIComponent(f.project) : ''}${f.agent ? '&agent=' + f.agent : ''}`),
     api('/api/projects'),
   ]);
   return `
-  <div class="view-head"><h1>${T('Sessioni')}</h1><p>${rows.length} ${T('conversazioni con Claude Code')}</p></div>
+  ${soloCorpo ? '' : `<div class="view-head"><h1>${T('Sessioni')}</h1><p>${rows.length} ${T('conversazioni con Claude Code')}</p></div>`}
   <div class="filters">
     <input type="search" data-filter-input="sessioni.q" value="${esc(f.q)}" placeholder="${T('cerca nel primo messaggio…')}" style="min-width:280px">
     ${['', 'claude', 'codex'].map((a) =>
@@ -739,7 +774,7 @@ views.sessioni = async () => {
     </select>
   </div>
   <div class="panel"><table>
-    <thead><tr><th>${T('quando')}</th><th>${T('di cosa')}</th><th>${T('agente')}</th><th>${T('progetto')}</th><th style="text-align:right">${T('scambi')}</th><th style="text-align:right">${T('tool')}</th><th></th></tr></thead>
+    <thead><tr><th>${T('quando')}</th><th>${T('di cosa')}</th><th>${T('agente')}</th><th>${T('progetto')}</th><th style="text-align:right">${T('turni')}</th><th style="text-align:right">${T('tool')}</th><th></th></tr></thead>
     <tbody>${rows.map((s) => `
       <tr>
         <td class="num" style="white-space:nowrap;color:var(--faint)">${dateIt(s.started_at)}<br><small>${ago(s.started_at)}</small></td>
@@ -759,13 +794,13 @@ views.sessioni = async () => {
   </table></div>`;
 };
 
-views.conoscenza = async () => {
+async function bloccoConoscenza(soloCorpo) {
   const rows = await api('/api/knowledge');
   const byType = {};
   rows.forEach((r) => (byType[r.type || 'altro'] = byType[r.type || 'altro'] || []).push(r));
   const label = { project: T('Progetti'), feedback: T('Come lavorare'), user: T('Chi sei'), reference: T('Riferimenti'), altro: T('Altro') };
   return `
-  <div class="view-head"><h1>${T('Conoscenza')}</h1><p>${rows.length} ${T('memorie indicizzate da Claude')}</p></div>
+  ${soloCorpo ? '' : `<div class="view-head"><h1>${T('Conoscenza')}</h1><p>${rows.length} ${T('memorie indicizzate da Claude')}</p></div>`}
   ${Object.entries(byType).map(([type, items]) => `
     <h3 style="margin:18px 0 10px;color:var(--faint);font-size:12px;text-transform:uppercase;letter-spacing:.05em">${label[type] || type} · ${items.length}</h3>
     <div class="panel"><div class="panel-body tight">
@@ -780,11 +815,11 @@ views.conoscenza = async () => {
     </div></div>`).join('')}`;
 };
 
-views.capacita = async () => {
+async function bloccoCapacita(soloCorpo) {
   const rows = await api('/api/capabilities');
   const groups = { skill: T('Skill'), plugin: T('Plugin'), routine: T('Routine programmate') };
   return `
-  <div class="view-head"><h1>${T('Capacità')}</h1><p>${T('cosa sa fare il tuo Claude Code')}</p></div>
+  ${soloCorpo ? '' : `<div class="view-head"><h1>${T('Capacità')}</h1><p>${T('cosa sa fare il tuo Claude Code')}</p></div>`}
   ${Object.entries(groups).map(([kind, label]) => {
     const items = rows.filter((r) => r.kind === kind);
     if (!items.length) return '';
@@ -890,9 +925,21 @@ async function openMemory(name) {
 }
 
 /* ---------------------------------------------------------------- router */
+/* Le vecchie viste sono diventate blocchi: i vecchi indirizzi continuano a
+   funzionare, portano dove il contenuto è finito. */
+const REDIREZIONI = { riepilogo: 'oggi', task: 'oggi', sessioni: 'archivio',
+                      agenti: 'archivio', conoscenza: 'archivio', capacita: 'archivio' };
+
 async function route() {
   const hash = location.hash.replace(/^#\//, '') || 'oggi';
-  const [name] = hash.split('/');
+  let [name] = hash.split('/');
+  if (REDIREZIONI[name]) {
+    if (name !== 'riepilogo' && name !== 'task') {
+      state.filters.archivio = { seg: name === 'agenti' ? 'agenti'
+        : name === 'conoscenza' ? 'memoria' : name === 'capacita' ? 'capacita' : 'sessioni' };
+    }
+    name = REDIREZIONI[name];
+  }
   const fn = views[name] || views.oggi;
   state.view = name;
   $$('.rail nav a').forEach((a) => a.classList.toggle('on', a.dataset.view === name));
@@ -943,6 +990,10 @@ document.addEventListener('click', async (ev) => {
         const cmd = (cwd ? `cd ${JSON.stringify(cwd)} && ` : '') + `claude --resume ${act.dataset.id}`;
         await navigator.clipboard.writeText(cmd);
         toast(T('comando copiato'));
+      } else if (name === 'task-tutti') {
+        state.filters.task = { status: 'tutti', project: '' };
+        const box = act.closest('.panel').querySelector('.panel-body');
+        box.innerHTML = taskRows(await api('/api/tasks?status=tutti&limit=200'));
       } else if (name === 'recap-gen') {
         state.recap.data = null; await generaRecap(true);
       } else if (name === 'recap-play') {

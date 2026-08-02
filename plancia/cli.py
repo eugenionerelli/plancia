@@ -23,7 +23,8 @@ def cmd_sync(args):
             sys.stderr.write(f"\r\x1b[K{msg}")
             sys.stderr.flush()
 
-    res = ingest.sync(full=args.full, progress=progress, skip_git=args.skip_git)
+    res = ingest.sync(full=args.full, progress=progress, skip_git=args.skip_git,
+                      modo=args.modo)
     sys.stderr.write("\r\x1b[K")
     for key, value in res.items():
         print(f"{key}: {value}")
@@ -198,6 +199,46 @@ def cmd_daily(args):
     print(setup_claude.recap_daily_on(args.ora, voce=args.voce))
 
 
+def cmd_flusso(args):
+    """Da dove arrivano i dati, quanto sono freschi e quanto costa aggiornarli."""
+    from . import codex, ingest
+    conn = store.connect()
+    store.init_db(conn)
+    try:
+        drive = ingest.drive_root()
+        fonti = [
+            ("sessioni Claude", str(config.CLAUDE_PROJECTS / "*/*.jsonl"), "caldo",
+             conn.execute("SELECT COUNT(*) FROM sessions WHERE agent='claude'").fetchone()[0]),
+            ("sessioni Codex", str(codex.SESSIONI), "caldo",
+             conn.execute("SELECT COUNT(*) FROM sessions WHERE agent='codex'").fetchone()[0]),
+            ("coda degli hook", str(config.QUEUE_FILE), "caldo",
+             conn.execute("SELECT COUNT(*) FROM events WHERE source='hook'").fetchone()[0]),
+            ("memoria", str(config.CLAUDE_PROJECTS / "*/memory"), "freddo",
+             conn.execute("SELECT COUNT(*) FROM knowledge").fetchone()[0]),
+            ("skill e plugin", str(config.CLAUDE_SKILLS), "freddo",
+             conn.execute("SELECT COUNT(*) FROM capabilities").fetchone()[0]),
+            ("GitHub", "gh repo list", "freddo",
+             conn.execute("SELECT COUNT(*) FROM repos").fetchone()[0]),
+            ("git locale", ", ".join(config.load_config().get("code_roots", [])) +
+             (f", {drive}" if drive else ""), "freddo",
+             conn.execute("SELECT COUNT(*) FROM commits").fetchone()[0]),
+        ]
+        print("FONTE                DOVE                                     GIRO     RIGHE")
+        for nome, dove, giro, n in fonti:
+            print(f"{nome:<20} {dove[-40:]:<40} {giro:<8} {n:>6}")
+        print()
+        print("  fonti → sync → SQLite → briefing.md, riepilogo, API, voce")
+        print()
+        for chiave, etichetta in (("last_sync_caldo", "ultimo giro caldo"),
+                                  ("last_sync_freddo", "ultimo giro freddo")):
+            print(f"  {etichetta}: {store.get_meta(conn, chiave, 'mai')}")
+        print(f"  riepilogo in cache: {'sì' if store.get_meta(conn, 'recap_testo') else 'no'}")
+        from . import agente
+        print(f"  processo Claude caldo: {agente.stato() or 'nessuno'}")
+    finally:
+        conn.close()
+
+
 def cmd_doctor(args):
     from . import setup_claude
     for line in setup_claude.doctor():
@@ -238,6 +279,8 @@ def build_parser():
     s = sub.add_parser("sync", help="rilegge sessioni, memoria, repo")
     s.add_argument("--full", action="store_true", help="rilegge i transcript da capo")
     s.add_argument("--skip-git", action="store_true", help="salta GitHub e git locale")
+    s.add_argument("--modo", choices=["tutto", "caldo", "freddo"], default="tutto",
+                   help="caldo: solo sessioni e hook. freddo: memoria, repo, indice")
     s.set_defaults(func=cmd_sync)
 
     s = sub.add_parser("mcp", help="server MCP su stdio (lo lancia Claude Code)")
@@ -321,6 +364,9 @@ def build_parser():
     s.add_argument("ora", nargs="?", default="08:45", help="HH:MM, default 08:45")
     s.add_argument("--voce", action="store_true", help="leggilo anche ad alta voce")
     s.set_defaults(func=cmd_daily)
+
+    s = sub.add_parser("flusso", help="da dove arrivano i dati e quanto sono freschi")
+    s.set_defaults(func=cmd_flusso)
 
     s = sub.add_parser("doctor", help="controlla lo stato")
     s.set_defaults(func=cmd_doctor)
