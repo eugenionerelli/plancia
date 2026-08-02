@@ -1,0 +1,26 @@
+#!/bin/bash
+# Il collaudo prima di spedire.
+#
+# Si accende una volta sola:
+#
+#     git config core.hooksPath .githooks
+#
+# Esiste perché è già successo: una riga rotta spedita perché il risultato del
+# collaudo era stato letto in fondo a una catena di comandi che usciva sempre
+# con zero. La macchina non si distrae.
+#
+# Per saltarlo quando serve davvero: git push --no-verify
+
+set -uo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+echo "· collaudo prima di spedire"
+if ! python3 tools/prova.py > /tmp/plancia-pre-push.txt 2>&1; then
+  echo
+  tail -20 /tmp/plancia-pre-push.txt
+  echo
+  echo "il collaudo non passa: niente push. (git push --no-verify per forzare)" >&2
+  exit 1
+fi
+
+tail -1 /tmp/plancia-pre-push.txt
