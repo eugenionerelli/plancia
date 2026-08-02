@@ -709,7 +709,8 @@ const PASSI = [
       it: "Da qualsiasi app, ⌥Spazio apre il pannello vocale. Ascolta di continuo e capisce dal silenzio quando hai finito. Le domande sui tuoi dati rispondono in un decimo di secondo senza chiamare nessun modello; il resto passa da Claude, che ha i tool di Plancia aperti e quindi può fare le cose, non solo dirle.",
       en: "From any app, ⌥Space opens the voice panel. It listens continuously and works out from the silence when you are done. Questions about your data answer in a tenth of a second with no model involved; everything else goes to Claude, which has Plancia's tools open and can actually do things, not just talk about them.",
     },
-    prova: null,
+    prova: { etichetta: { it: "Attiva il microfono", en: "Turn on the microphone" },
+             url: "plancia://permessi" },
   },
   {
     t: { it: "Mandare un lavoro a un agente", en: "Dispatching work to an agent" },
@@ -754,7 +755,8 @@ views.benvenuto = async () => {
     <div style="display:flex;gap:var(--s2);margin-top:var(--s6);align-items:center">
       ${i > 0 ? `<button class="ghost" data-act="passo" data-n="${i - 1}">${L === 'en' ? 'Back' : 'Indietro'}</button>` : ''}
       ${p.prova ? `<button class="ghost" data-act="prova-passo"
-        data-vista="${p.prova.vista || ''}" data-azione="${p.prova.azione || ''}">${p.prova.etichetta[L]}</button>` : ''}
+        data-vista="${p.prova.vista || ''}" data-azione="${p.prova.azione || ''}"
+        data-url="${p.prova.url || ''}">${p.prova.etichetta[L]}</button>` : ''}
       <span class="spacer" style="margin-left:auto"></span>
       ${i < PASSI.length - 1
         ? `<button class="primary" data-act="passo" data-n="${i + 1}">${L === 'en' ? 'Next' : 'Avanti'}</button>`
@@ -1258,7 +1260,9 @@ document.addEventListener('click', async (ev) => {
       } else if (name === 'passo') {
         state.passo = +act.dataset.n; await route();
       } else if (name === 'prova-passo') {
-        if (act.dataset.azione === 'manda-nuovo') {
+        if (act.dataset.url) {
+          location.href = act.dataset.url;
+        } else if (act.dataset.azione === 'manda-nuovo') {
           if (!state.progetti) state.progetti = await api('/api/projects');
           apriCompositore({});
         } else if (act.dataset.vista) {
