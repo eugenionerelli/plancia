@@ -15,7 +15,9 @@ import re
 # Il dominio nudo va riconosciuto anche senza http davanti: quasi nessuno lo
 # scrive. E il percorso deve prendersi anche la tilde, se no resta lì da sola.
 URL = re.compile(r"https?://\S+|\b(?:www\.)?[\w-]+(?:\.[\w-]+)*\.[a-z]{2,}(?:/\S*)+")
-PERCORSO = re.compile(r"~?(?:/[\w.\-]+){2,}")
+# Il guardingo davanti serve alle date: in "12/08/2026" la parte "/08/2026"
+# sembra un percorso, e senza questo diventava "122026".
+PERCORSO = re.compile(r"(?<![\w/])~?(?:/[\w.\-]+){2,}")
 SHA = re.compile(r"\b[0-9a-f]{7,40}\b")
 MARCATORI = re.compile(r"[`*_#>]+")
 

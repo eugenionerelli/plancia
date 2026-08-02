@@ -138,6 +138,12 @@ def main():
     prova("la punteggiatura della frase resta",
           per_voce("vedi github.com/a/b, poi torna", "it").endswith("poi torna")
           and "," in per_voce("vedi github.com/a/b, poi torna", "it"))
+    prova("le date con le barre non diventano numeri",
+          per_voce("la riunione è il 12/08/2026 alle nove", "it")
+          == "la riunione è il 12/08/2026 alle nove")
+    prova("ripeti risponde uguale da qualsiasi porta",
+          _j.esegui("quanti progetti attivi ho", "it", conn)["risposta"]
+          == _j.esegui("ripeti", "it", conn)["risposta"])
     prova("una frase normale non viene toccata",
           per_voce("Oggi tre sessioni e due commit, niente di strano.", "it")
           == "Oggi tre sessioni e due commit, niente di strano.")

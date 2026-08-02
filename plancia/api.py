@@ -461,11 +461,7 @@ class Handler(BaseHTTPRequestHandler):
                 if esito.get("risposta"):
                     from .voce_testo import per_voce
                     esito["da_dire"] = per_voce(esito["risposta"], lang)
-                # L'ultima cosa detta si tiene da parte: "ripeti" vuole quella,
-                # non una riformulazione. Una ripetizione non si risalva.
-                if esito.get("risposta") and not esito.get("ripetuta"):
-                    store.set_meta(conn, "ultima_risposta", esito["risposta"])
-                    conn.commit()
+
                 nativa = body.get("voce_nativa") and esito["motore"] == "say"
                 if not esito.get("muto") and body.get("voce", True) and \
                         esito.get("risposta") and not nativa:

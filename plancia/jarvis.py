@@ -285,6 +285,22 @@ def _esegui_proposta(conn, scelta, d, lang, forza_esecuzione=False) -> dict:
 # --------------------------------------------------------------------------
 
 def esegui(testo: str, lang=None, conn=None) -> dict:
+    esito = _esegui(testo, lang, conn)
+    # L'ultima cosa detta si tiene da parte qui e non nella rotta HTTP: da
+    # terminale, dall'app e da MCP "ripeti" deve rispondere alla stessa cosa.
+    try:
+        if esito.get("risposta") and not esito.get("ripetuta"):
+            c = conn or store.connect()
+            store.set_meta(c, "ultima_risposta", esito["risposta"])
+            c.commit()
+            if conn is None:
+                c.close()
+    except Exception:
+        pass
+    return esito
+
+
+def _esegui(testo: str, lang=None, conn=None) -> dict:
     lang = recap.lang_or_default(lang)
     d = _dizionario(lang)
     chiudi = False
