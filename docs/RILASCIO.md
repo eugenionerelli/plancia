@@ -138,6 +138,18 @@ gh release create v0.3.0 dist/Plancia-0.3.0.dmg dist/Plancia-0.3.0.dmg.sha256 \
 - [ ] il DMG si apre su un Mac dove non hai mai compilato niente
 - [ ] il link di pagamento porta dove deve
 
+## Il gancio prima del push
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Una volta sola, e da lì in poi `git push` fa girare il collaudo e non parte se
+non passa. Esiste perché è già successo di spedire una riga rotta avendo letto
+l'esito in fondo a una catena di comandi che usciva sempre con zero.
+
+Con `git push --no-verify` si salta, quando serve davvero.
+
 ## Il sito
 
 Sta in `site/`, è HTML e CSS scritti a mano, nessuna dipendenza e nessun passo di

@@ -284,6 +284,16 @@ The server listens on loopback only. HTTP writes require the token in
 `~/.plancia/token`; the dashboard receives it from the server inside the page.
 Reads are open: it is your data, already on your disk.
 
+## Contributing
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Turns on the hook that runs `python3 tools/prova.py` before every push: eighty
+two checks in about ten seconds, against a throwaway archive that never touches
+yours.
+
 ## Licence and price
 
 GPL-3.0-or-later. See [LICENSE](LICENSE) and [COPYRIGHT](COPYRIGHT). Versions up

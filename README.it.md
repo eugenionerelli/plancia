@@ -286,6 +286,16 @@ Il server ascolta solo su loopback. Le scritture via HTTP chiedono il token in
 `~/.plancia/token`, che la dashboard riceve dal server dentro la pagina. Le
 letture sono libere: sono dati tuoi, già sul tuo disco.
 
+## Contribuire
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Accende il gancio che fa girare `python3 tools/prova.py` prima di ogni push:
+ottantadue controlli in una decina di secondi, su un archivio finto che non tocca
+il tuo.
+
 ## Licenza
 
 GPL-3.0-or-later. Vedi [LICENSE](LICENSE) e [COPYRIGHT](COPYRIGHT). Le versioni
