@@ -13,8 +13,12 @@ Due modi, e la differenza è tutta qui:
 - **esegui**: l'agente può modificare i file dentro la cartella del progetto.
   Si sceglie una volta per lancio, mai in automatico.
 
-Il processo gira staccato: se chiudi l'app, il lavoro continua e lo stato
-finisce lo stesso nel registro.
+Il lancio vive dentro il processo che lo ha avviato, in un thread daemon. Se
+quel processo finisce, il thread muore con lui e il lancio resta appeso finché
+`riconcilia()` non lo chiude al riavvio. In pratica funziona perché a lanciare è
+il server, che sta su: mandare un lancio da uno script che poi esce vuol dire
+buttarlo via, e il 4 agosto 2026 è successo per davvero, tre volte di fila.
+Questa riga prima diceva il contrario.
 """
 
 import json
