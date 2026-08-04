@@ -91,7 +91,7 @@ const EN = {
   'guarda e propone, non tocca niente': 'reads and plans, touches nothing',
   'può modificare i file del progetto': 'can modify the project files',
   'In lavorazione': 'Running', 'Lanci recenti': 'Recent runs',
-  'riuscito': 'done', 'fallito': 'failed', 'in coda': 'queued', 'annullato': 'cancelled',
+  'riuscito': 'done', 'fallito': 'failed', bloccato: 'blocked', 'in coda': 'queued', 'annullato': 'cancelled',
   'Cosa converrebbe fare': 'What is worth doing', 'fallo': 'do it',
   'niente in sospeso': 'nothing pending', 'nessun task aperto da nessuna parte': 'no open task anywhere',
   'Il lavoro': 'The work', 'annulla': 'cancel', 'apri il registro': 'open the log',
@@ -842,8 +842,8 @@ views.lavagna = async (soloCorpo) => {
   </div>` : ''}`;
 };
 
-const STATO_LANCIO = { riuscito: 'ok', fallito: 'danger', 'in corso': 'accent',
-                       'in coda': '', annullato: '' };
+const STATO_LANCIO = { riuscito: 'ok', fallito: 'danger', bloccato: 'warn',
+                       'in corso': 'accent', 'in coda': '', annullato: '' };
 
 const rigaLancio = (r) => `
   <div class="row" data-act="lancio" data-id="${r.id}" style="cursor:pointer">

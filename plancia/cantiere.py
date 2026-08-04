@@ -38,11 +38,17 @@ TOOL_LETTURA = ["Read", "Glob", "Grep", "WebSearch", "WebFetch",
                 "Bash(git:*)", "Bash(ls:*)", "Bash(rg:*)", "Bash(cat:*)",
                 "mcp__plancia__plancia_briefing", "mcp__plancia__plancia_search",
                 "mcp__plancia__plancia_projects", "mcp__plancia__plancia_memory",
-                "mcp__plancia__plancia_sessions", "mcp__plancia__plancia_tasks"]
+                "mcp__plancia__plancia_sessions", "mcp__plancia__plancia_tasks",
+                # I post mancavano da tutte e due le liste, e senza di loro il
+                # lato social del cantiere non era raggiungibile: un lancio a cui
+                # si chiede una bozza si fermava a chiedere il permesso.
+                "mcp__plancia__plancia_posts", "mcp__plancia__plancia_lavagna"]
 TOOL_SCRITTURA = TOOL_LETTURA + ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash",
                                  "mcp__plancia__plancia_task_update",
                                  "mcp__plancia__plancia_log",
-                                 "mcp__plancia__plancia_project_update"]
+                                 "mcp__plancia__plancia_project_update",
+                                 "mcp__plancia__plancia_post_add",
+                                 "mcp__plancia__plancia_post_update"]
 
 
 def codex_bin() -> str:
@@ -164,7 +170,7 @@ def _comando(agente: str, modo: str, cwd: str) -> list:
 
 
 def _leggi_claude(riga: str, acc: dict):
-    """Estrae dallo stream quello che serve: sessione, esito, token."""
+    """Estrae dallo stream quello che serve: sessione, esito, token, permessi negati."""
     try:
         d = json.loads(riga)
     except Exception:
@@ -176,6 +182,13 @@ def _leggi_claude(riga: str, acc: dict):
         acc["token"] = ((d.get("usage") or {}).get("output_tokens") or 0)
         acc["costo"] = d.get("total_cost_usd") or 0
         acc["errore"] = bool(d.get("is_error"))
+        # Una sessione che si ferma a chiedere un permesso esce con zero e senza
+        # errore: per il sistema operativo è andata bene, e il lavoro non c'è.
+        acc["negati"] = sorted({
+            (p or {}).get("tool_name", "")
+            for p in (d.get("permission_denials") or [])
+            if (p or {}).get("tool_name")
+        })
 
 
 def avvia(conn, titolo, dettaglio="", progetto=None, istruzioni="", agente="claude",
@@ -214,7 +227,8 @@ def avvia(conn, titolo, dettaglio="", progetto=None, istruzioni="", agente="clau
 def _esegui(run_id, agente, modo, prompt, cwd, log, titolo, progetto, task_id):
     conn = store.connect()
     store.init_db(conn)
-    acc = {"sessione": None, "esito": "", "token": 0, "costo": 0, "errore": False}
+    acc = {"sessione": None, "esito": "", "token": 0, "costo": 0, "errore": False,
+           "negati": []}
     inizio = time.time()
     try:
         cmd = _comando(agente, modo, cwd)
@@ -247,7 +261,20 @@ def _esegui(run_id, agente, modo, prompt, cwd, log, titolo, progetto, task_id):
             proc.wait(timeout=3600)
             if agente == "codex" and not acc["esito"]:
                 acc["esito"] = "\n".join(ultime[-12:]).strip()
-            stato = "riuscito" if proc.returncode == 0 and not acc["errore"] else "fallito"
+            if proc.returncode != 0 or acc["errore"]:
+                stato = "fallito"
+            elif acc.get("negati"):
+                # Uscita pulita, lavoro non fatto: l'agente ha chiesto un
+                # permesso e si è fermato. Chiamarlo riuscito faceva chiudere
+                # il task come "fatto" senza che nessuno avesse fatto niente.
+                stato = "bloccato"
+                mancanti = ", ".join(acc["negati"])
+                acc["esito"] = (
+                    f"Si è fermato perché non ha il permesso di usare: {mancanti}. "
+                    f"{acc.get('esito') or ''}"
+                ).strip()
+            else:
+                stato = "riuscito"
     except Exception as exc:
         stato, acc["esito"] = "fallito", f"{type(exc).__name__}: {exc}"
 
@@ -263,8 +290,14 @@ def _chiudi(conn, run_id, stato, esito, acc, titolo, progetto, task_id, modo):
          acc.get("token") or 0, acc.get("costo") or 0, run_id))
     if task_id:
         # Solo l'esecuzione vera chiude il task: una proposta lo lascia aperto,
-        # perché proporre non è fare.
-        nuovo = "fatto" if (stato == "riuscito" and modo == "esegui") else "aperto"
+        # perché proporre non è fare. E un lancio bloccato resta bloccato anche
+        # sul task, altrimenti sparisce dalla lavagna come se fosse a posto.
+        if stato == "bloccato":
+            nuovo = "bloccato"
+        elif stato == "riuscito" and modo == "esegui":
+            nuovo = "fatto"
+        else:
+            nuovo = "aperto"
         conn.execute("UPDATE tasks SET status=?, updated_at=?, done_at=? WHERE id=?",
                      (nuovo, store.now(), store.now() if nuovo == "fatto" else None, task_id))
     conn.commit()

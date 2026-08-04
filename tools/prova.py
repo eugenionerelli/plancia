@@ -160,6 +160,50 @@ def main():
     rid = conn.execute("SELECT id FROM runs WHERE prompt='senza pid'").fetchone()[0]
     prova("si annulla anche un lancio senza processo", cantiere.annulla(conn, rid) is True)
 
+    # I post mancavano da tutte e due le liste: chiedere una bozza a un lancio
+    # voleva dire farlo fermare a chiedere un permesso.
+    prova("un lancio può leggere i post",
+          "mcp__plancia__plancia_posts" in cantiere.TOOL_LETTURA)
+    prova("e in esecuzione può scriverne una bozza",
+          "mcp__plancia__plancia_post_add" in cantiere.TOOL_SCRITTURA
+          and "mcp__plancia__plancia_post_update" in cantiere.TOOL_SCRITTURA)
+    prova("ma in proposta no, perché proporre non è scrivere",
+          "mcp__plancia__plancia_post_add" not in cantiere.TOOL_LETTURA)
+
+    # Una sessione che si ferma a chiedere un permesso esce con zero e senza
+    # errore. Contarla come riuscita faceva chiudere il task come "fatto" senza
+    # che nessuno avesse fatto niente: è già successo, il 4 agosto 2026.
+    acc = {"sessione": None, "esito": "", "token": 0, "costo": 0, "errore": False,
+           "negati": []}
+    cantiere._leggi_claude(json.dumps({
+        "type": "result", "result": "Serve la tua approvazione.", "is_error": False,
+        "usage": {"output_tokens": 10}, "total_cost_usd": 0.1,
+        "permission_denials": [{"tool_name": "mcp__plancia__plancia_post_add"},
+                               {"tool_name": "mcp__plancia__plancia_post_add"}],
+    }), acc)
+    prova("i permessi negati si leggono dallo stream",
+          acc["negati"] == ["mcp__plancia__plancia_post_add"], str(acc["negati"]))
+    prova("e un'uscita pulita senza errori non basta a dire riuscito",
+          bool(acc["negati"]) and not acc["errore"])
+
+    conn.execute("INSERT INTO tasks(title, status, created_at, updated_at) "
+                 "VALUES('task di un lancio bloccato','in corso',?,?)",
+                 (store.now(), store.now()))
+    conn.commit()
+    tid = conn.execute("SELECT id FROM tasks WHERE title='task di un lancio bloccato'"
+                       ).fetchone()[0]
+    conn.execute("INSERT INTO runs(task_id, agente, modo, prompt, cwd, stato, inizio) "
+                 "VALUES(?,'claude','esegui','bloccato','/tmp','in corso',?)",
+                 (tid, store.now()))
+    conn.commit()
+    brid = conn.execute("SELECT id FROM runs WHERE prompt='bloccato'").fetchone()[0]
+    cantiere._chiudi(conn, brid, "bloccato", "niente permessi", acc,
+                     "prova", None, tid, "esegui")
+    prova("un lancio bloccato non chiude il task come fatto",
+          conn.execute("SELECT status FROM tasks WHERE id=?", (tid,)).fetchone()[0]
+          == "bloccato",
+          conn.execute("SELECT status FROM tasks WHERE id=?", (tid,)).fetchone()[0])
+
     # ------------------------------------------------------------ comandi voce
     from plancia import jarvis as _j  # noqa: E402
     coppie = [("vai più veloce", "velocita"), ("parla più piano", "velocita"),
